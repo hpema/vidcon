@@ -1,0 +1,109 @@
+{
+ "actions": [],
+ "creation": "2026-02-07 18:50:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "google_integration_section",
+  "google_calendar",
+  "column_break_1",
+  "enable_auto_transcript_fetch",
+  "transcript_settings_section",
+  "transcript_fetch_delay",
+  "column_break_2",
+  "default_meeting_duration",
+  "webhook_section",
+  "enable_webhook",
+  "webhook_url"
+ ],
+ "fields": [
+  {
+   "fieldname": "google_integration_section",
+   "fieldtype": "Section Break",
+   "label": "Google Integration"
+  },
+  {
+   "fieldname": "google_calendar",
+   "fieldtype": "Link",
+   "label": "Google Calendar",
+   "options": "Google Calendar",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "enable_auto_transcript_fetch",
+   "fieldtype": "Check",
+   "label": "Enable Auto Transcript Fetch"
+  },
+  {
+   "fieldname": "transcript_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Transcript Settings"
+  },
+  {
+   "default": "10",
+   "depends_on": "enable_auto_transcript_fetch",
+   "description": "Minutes to wait after meeting ends before fetching transcript",
+   "fieldname": "transcript_fetch_delay",
+   "fieldtype": "Int",
+   "label": "Transcript Fetch Delay (Minutes)"
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "30",
+   "description": "Default duration for new meetings in minutes",
+   "fieldname": "default_meeting_duration",
+   "fieldtype": "Int",
+   "label": "Default Meeting Duration (Minutes)"
+  },
+  {
+   "fieldname": "webhook_section",
+   "fieldtype": "Section Break",
+   "label": "Webhook Settings"
+  },
+  {
+   "default": "0",
+   "description": "Enable Google Calendar push notifications (advanced)",
+   "fieldname": "enable_webhook",
+   "fieldtype": "Check",
+   "label": "Enable Webhook"
+  },
+  {
+   "depends_on": "enable_webhook",
+   "fieldname": "webhook_url",
+   "fieldtype": "Data",
+   "label": "Webhook URL",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-02-07 18:50:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vidcon",
+ "name": "VidCon Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
