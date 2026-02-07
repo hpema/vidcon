@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\":\"vidcon_meeting\",\"type\":\"Link\",\"label\":\"VidCon Meeting\",\"icon\":\"video\",\"link_to\":\"VidCon Meeting\",\"link_type\":\"DocType\",\"onboard\":0},{\"id\":\"vidcon_settings\",\"type\":\"Link\",\"label\":\"VidCon Settings\",\"icon\":\"settings\",\"link_to\":\"VidCon Settings\",\"link_type\":\"DocType\",\"onboard\":0},{\"id\":\"event\",\"type\":\"Link\",\"label\":\"Event\",\"icon\":\"calendar\",\"link_to\":\"Event\",\"link_type\":\"DocType\",\"onboard\":0},{\"id\":\"google_calendar\",\"type\":\"Link\",\"label\":\"Google Calendar\",\"icon\":\"calendar\",\"link_to\":\"Google Calendar\",\"link_type\":\"DocType\",\"onboard\":0}]",
+ "content": "[{\"id\":\"vC1mEeTiNg\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Meetings</b></span>\",\"col\":12}},{\"id\":\"vCmTg12345\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"VidCon Meeting\",\"col\":3}},{\"id\":\"eVeNt12345\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Event\",\"col\":3}},{\"id\":\"sPaCeR1234\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Settings</b></span>\",\"col\":12}},{\"id\":\"sEtTiNg123\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"VidCon Settings\",\"col\":3}},{\"id\":\"gOoGlE1234\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Google Calendar\",\"col\":3}}]",
  "creation": "2026-02-07 19:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -23,6 +23,35 @@
  "quick_lists": [],
  "roles": [],
  "sequence_id": 20,
- "shortcuts": [],
+ "shortcuts": [
+  {
+   "color": "Blue",
+   "doc_view": "List",
+   "label": "VidCon Meeting",
+   "link_to": "VidCon Meeting",
+   "type": "DocType"
+  },
+  {
+   "color": "Green",
+   "doc_view": "List",
+   "label": "Event",
+   "link_to": "Event",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "VidCon Settings",
+   "link_to": "VidCon Settings",
+   "type": "DocType"
+  },
+  {
+   "color": "Orange",
+   "doc_view": "List",
+   "label": "Google Calendar",
+   "link_to": "Google Calendar",
+   "type": "DocType"
+  }
+ ],
  "title": "VidCon"
 }
