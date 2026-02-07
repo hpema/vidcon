@@ -48,8 +48,10 @@ class VidConMeeting(Document):
 			
 			# Combine date and time for starts_on and ends_on
 			from datetime import datetime
-			starts_on = datetime.combine(self.meeting_date, get_time(self.start_time))
-			ends_on = datetime.combine(self.meeting_date, get_time(self.end_time))
+			from frappe.utils import getdate
+			meeting_date = getdate(self.meeting_date)
+			starts_on = datetime.combine(meeting_date, get_time(self.start_time))
+			ends_on = datetime.combine(meeting_date, get_time(self.end_time))
 			
 			# Create Event document
 			event = frappe.get_doc({
@@ -101,8 +103,10 @@ class VidConMeeting(Document):
 			event = frappe.get_doc("Event", self.event)
 			
 			from datetime import datetime
-			starts_on = datetime.combine(self.meeting_date, get_time(self.start_time))
-			ends_on = datetime.combine(self.meeting_date, get_time(self.end_time))
+			from frappe.utils import getdate
+			meeting_date = getdate(self.meeting_date)
+			starts_on = datetime.combine(meeting_date, get_time(self.start_time))
+			ends_on = datetime.combine(meeting_date, get_time(self.end_time))
 			
 			event.subject = self.title
 			event.description = self.description or ""
