@@ -70,11 +70,14 @@ class VidConMeeting(Document):
 			# Add attendees to event
 			if self.attendees:
 				for attendee in self.attendees:
-					event.append("event_participants", {
-						"email": attendee.email,
-						"reference_doctype": attendee.reference_doctype or "Contact",
-						"reference_docname": attendee.reference_docname
-					})
+					# Only add to event_participants if we have reference fields
+					# Otherwise, Event will just use the email for invitations
+					if attendee.reference_doctype and attendee.reference_docname:
+						event.append("event_participants", {
+							"email": attendee.email,
+							"reference_doctype": attendee.reference_doctype,
+							"reference_docname": attendee.reference_docname
+						})
 			
 			event.insert(ignore_permissions=True)
 			
@@ -117,11 +120,13 @@ class VidConMeeting(Document):
 			event.event_participants = []
 			if self.attendees:
 				for attendee in self.attendees:
-					event.append("event_participants", {
-						"email": attendee.email,
-						"reference_doctype": attendee.reference_doctype or "Contact",
-						"reference_docname": attendee.reference_docname
-					})
+					# Only add to event_participants if we have reference fields
+					if attendee.reference_doctype and attendee.reference_docname:
+						event.append("event_participants", {
+							"email": attendee.email,
+							"reference_doctype": attendee.reference_doctype,
+							"reference_docname": attendee.reference_docname
+						})
 			
 			event.save(ignore_permissions=True)
 
