@@ -94,7 +94,7 @@ def create_meet_subscription(google_calendar_name, user_email, pubsub_topic):
 				"pubsubTopic": pubsub_topic
 			},
 			"payloadOptions": {
-				"includeResource": True
+				"includeResource": False
 			}
 		}
 		
