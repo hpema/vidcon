@@ -218,33 +218,64 @@ def handle_conference_started(event_data):
 	Update VidCon Meeting status to In Progress.
 	"""
 	try:
+		print(f"\n=== HANDLING CONFERENCE STARTED ===")
+		print(f"Event data: {json.dumps(event_data, indent=2)}")
+		
 		# Extract conference details
 		conference_record = event_data.get('conferenceRecord', {})
-		conference_id = conference_record.get('name', '').split('/')[-1]
+		conference_name = conference_record.get('name', '')
+		conference_id = conference_name.split('/')[-1] if conference_name else ''
 		start_time = conference_record.get('startTime')
 		
-		frappe.logger().info(f"Conference started: {conference_id}")
+		print(f"Conference ID: {conference_id}")
+		print(f"Start time: {start_time}")
 		
-		# Find VidCon Meeting by conference ID
+		# Find VidCon Meeting by conference ID or space ID
 		meetings = frappe.get_all(
 			"VidCon Meeting",
 			filters={
 				"google_conference_id": conference_id,
 				"status": "Scheduled"
 			},
-			fields=["name"]
+			fields=["name", "google_space_id", "google_meet_link"]
 		)
+		
+		print(f"Found {len(meetings)} meetings by conference_id")
+		
+		# If not found by conference ID, try by space ID from subscription
+		if not meetings:
+			# Get space ID from the event (it's in the ce-subject attribute)
+			# We'll need to pass it from the main handler
+			print(f"No meetings found by conference_id, trying all scheduled meetings")
+			meetings = frappe.get_all(
+				"VidCon Meeting",
+				filters={"status": "Scheduled"},
+				fields=["name", "google_space_id", "google_meet_link", "google_conference_id"]
+			)
+			print(f"All scheduled meetings: {json.dumps(meetings, indent=2)}")
 		
 		for meeting in meetings:
 			meeting_doc = frappe.get_doc("VidCon Meeting", meeting.name)
+			
+			# Store conference ID if not already set
+			if not meeting_doc.google_conference_id:
+				meeting_doc.google_conference_id = conference_id
+			
 			meeting_doc.status = "In Progress"
 			meeting_doc.actual_start_time = start_time
 			meeting_doc.save(ignore_permissions=True)
+			
+			print(f"✓ Meeting {meeting.name} marked as In Progress")
 			frappe.logger().info(f"Meeting {meeting.name} marked as In Progress")
 		
+		if not meetings:
+			print(f"✗ No meetings found for conference {conference_id}")
+		
 		frappe.db.commit()
+		print(f"=== CONFERENCE STARTED HANDLER COMPLETE ===\n")
 		
 	except Exception as e:
+		print(f"✗ Error handling conference started: {str(e)}")
 		frappe.logger().error(f"Error handling conference started: {str(e)}")
 		frappe.log_error(title="Conference Started Handler Error", message=str(e))
 
