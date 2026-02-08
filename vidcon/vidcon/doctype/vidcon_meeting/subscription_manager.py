@@ -27,9 +27,9 @@ def create_meet_subscription(google_calendar_name, user_email, pubsub_topic):
 		google_calendar = frappe.get_doc("Google Calendar", google_calendar_name)
 		google_settings = frappe.get_single("Google Settings")
 		
-		# Build credentials
+		# Build credentials (Frappe generates access_token on demand)
 		credentials = Credentials(
-			token=google_calendar.get_password("access_token"),
+			token=google_calendar.get_access_token(),
 			refresh_token=google_calendar.get_password("refresh_token"),
 			token_uri="https://oauth2.googleapis.com/token",
 			client_id=google_settings.client_id,
@@ -82,9 +82,9 @@ def delete_meet_subscription(google_calendar_name, subscription_id):
 		google_calendar = frappe.get_doc("Google Calendar", google_calendar_name)
 		google_settings = frappe.get_single("Google Settings")
 		
-		# Build credentials
+		# Build credentials (Frappe generates access_token on demand)
 		credentials = Credentials(
-			token=google_calendar.get_password("access_token"),
+			token=google_calendar.get_access_token(),
 			refresh_token=google_calendar.get_password("refresh_token"),
 			token_uri="https://oauth2.googleapis.com/token",
 			client_id=google_settings.client_id,
@@ -120,9 +120,9 @@ def get_subscription_status(google_calendar_name, subscription_id):
 		google_calendar = frappe.get_doc("Google Calendar", google_calendar_name)
 		google_settings = frappe.get_single("Google Settings")
 		
-		# Build credentials
+		# Build credentials (Frappe generates access_token on demand)
 		credentials = Credentials(
-			token=google_calendar.get_password("access_token"),
+			token=google_calendar.get_access_token(),
 			refresh_token=google_calendar.get_password("refresh_token"),
 			token_uri="https://oauth2.googleapis.com/token",
 			client_id=google_settings.client_id,
@@ -157,9 +157,9 @@ def list_subscriptions(google_calendar_name):
 		google_calendar = frappe.get_doc("Google Calendar", google_calendar_name)
 		google_settings = frappe.get_single("Google Settings")
 		
-		# Build credentials
+		# Build credentials (Frappe generates access_token on demand)
 		credentials = Credentials(
-			token=google_calendar.get_password("access_token"),
+			token=google_calendar.get_access_token(),
 			refresh_token=google_calendar.get_password("refresh_token"),
 			token_uri="https://oauth2.googleapis.com/token",
 			client_id=google_settings.client_id,

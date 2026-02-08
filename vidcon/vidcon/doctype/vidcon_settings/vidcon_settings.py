@@ -18,16 +18,14 @@ class VidConSettings(Document):
 				frappe.throw(_("Google Calendar is required to enable Meet Events"))
 			
 			# Check if Google Calendar is authorized
-			google_calendar = frappe.get_doc("Google Calendar", self.google_calendar)
-			
-			# Check if access_token exists in the auth table
-			has_token = frappe.db.exists("__Auth", {
+			# Frappe stores refresh_token (permanent) and generates access_token on demand
+			has_refresh_token = frappe.db.exists("__Auth", {
 				"doctype": "Google Calendar",
 				"name": self.google_calendar,
-				"fieldname": "access_token"
+				"fieldname": "refresh_token"
 			})
 			
-			if not has_token:
+			if not has_refresh_token:
 				frappe.throw(_(
 					"Google Calendar '{0}' is not authorized. Please open the Google Calendar document and click 'Authorize API Access' before enabling Meet Events."
 				).format(self.google_calendar))
