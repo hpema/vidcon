@@ -148,23 +148,13 @@ app_license = "mit"
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"vidcon.tasks.all"
-# 	],
-# 	"daily": [
-# 		"vidcon.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"vidcon.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"vidcon.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"vidcon.tasks.monthly"
-# 	],
-# }
+scheduler_events = {
+	"cron": {
+		"*/15 * * * *": [
+			"vidcon.vidcon.doctype.vidcon_meeting.scheduled_tasks.check_pending_transcripts"
+		]
+	}
+}
 
 # Testing
 # -------

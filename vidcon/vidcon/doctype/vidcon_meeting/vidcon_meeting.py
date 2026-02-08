@@ -144,9 +144,14 @@ def sync_event_and_fetch_meet_link(meeting):
 		
 		# Check if event has google_meet_link
 		if event_doc.google_meet_link:
+			# Extract space_id from Meet link
+			# Format: https://meet.google.com/abc-defg-hij
+			space_id = event_doc.google_meet_link.split('/')[-1] if event_doc.google_meet_link else None
+			
 			frappe.db.set_value("VidCon Meeting", meeting, {
 				"google_meet_link": event_doc.google_meet_link,
-				"google_calendar_event_id": event_doc.google_calendar_event_id
+				"google_calendar_event_id": event_doc.google_calendar_event_id,
+				"google_space_id": space_id
 			}, update_modified=False)
 			frappe.db.commit()
 		else:

@@ -19,8 +19,12 @@
   "google_integration_section",
   "event",
   "google_meet_link",
+  "google_space_id",
   "column_break_3",
   "google_calendar_event_id",
+  "google_conference_id",
+  "meeting_lifecycle_section",
+  "actual_start_time",
   "actual_end_time",
   "attendees_section",
   "attendees",
@@ -32,6 +36,8 @@
   "transcript_file",
   "column_break_4",
   "transcript_retrieved_at",
+  "transcript_file_id",
+  "transcript_url",
   "notes_section",
   "meeting_notes",
   "ai_summary"
@@ -123,6 +129,13 @@
    "read_only": 1
   },
   {
+   "fieldname": "google_space_id",
+   "fieldtype": "Data",
+   "label": "Google Space ID",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
    "fieldname": "column_break_3",
    "fieldtype": "Column Break"
   },
@@ -130,6 +143,24 @@
    "fieldname": "google_calendar_event_id",
    "fieldtype": "Data",
    "label": "Google Calendar Event ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "google_conference_id",
+   "fieldtype": "Data",
+   "label": "Google Conference ID",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "meeting_lifecycle_section",
+   "fieldtype": "Section Break",
+   "label": "Meeting Lifecycle"
+  },
+  {
+   "fieldname": "actual_start_time",
+   "fieldtype": "Datetime",
+   "label": "Actual Start Time",
    "read_only": 1
   },
   {
@@ -193,6 +224,19 @@
    "fieldname": "transcript_retrieved_at",
    "fieldtype": "Datetime",
    "label": "Transcript Retrieved At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "transcript_file_id",
+   "fieldtype": "Data",
+   "label": "Transcript File ID",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "transcript_url",
+   "fieldtype": "Data",
+   "label": "Transcript URL",
    "read_only": 1
   },
   {

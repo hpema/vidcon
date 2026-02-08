@@ -6,15 +6,22 @@
  "field_order": [
   "google_integration_section",
   "google_calendar",
+  "meeting_organizer_email",
   "column_break_1",
   "enable_auto_transcript_fetch",
+  "enable_meet_events",
   "transcript_settings_section",
   "transcript_fetch_delay",
   "column_break_2",
   "default_meeting_duration",
-  "webhook_section",
-  "enable_webhook",
-  "webhook_url"
+  "pubsub_section",
+  "pubsub_topic_name",
+  "pubsub_subscription_endpoint",
+  "meet_subscription_section",
+  "meet_subscription_id",
+  "subscription_target_user",
+  "column_break_3",
+  "meet_subscription_state"
  ],
  "fields": [
   {
@@ -30,6 +37,13 @@
    "reqd": 1
   },
   {
+   "description": "Email of the user who organizes meetings (usually the Google Calendar owner)",
+   "fieldname": "meeting_organizer_email",
+   "fieldtype": "Data",
+   "label": "Meeting Organizer Email",
+   "options": "Email"
+  },
+  {
    "fieldname": "column_break_1",
    "fieldtype": "Column Break"
   },
@@ -38,6 +52,13 @@
    "fieldname": "enable_auto_transcript_fetch",
    "fieldtype": "Check",
    "label": "Enable Auto Transcript Fetch"
+  },
+  {
+   "default": "0",
+   "description": "Automatically subscribe to Google Meet events for real-time updates",
+   "fieldname": "enable_meet_events",
+   "fieldtype": "Check",
+   "label": "Enable Meet Events"
   },
   {
    "fieldname": "transcript_settings_section",
@@ -64,22 +85,49 @@
    "label": "Default Meeting Duration (Minutes)"
   },
   {
-   "fieldname": "webhook_section",
+   "collapsible": 1,
+   "fieldname": "pubsub_section",
    "fieldtype": "Section Break",
-   "label": "Webhook Settings"
+   "label": "Google Cloud Pub/Sub Configuration"
   },
   {
-   "default": "0",
-   "description": "Enable Google Calendar push notifications (advanced)",
-   "fieldname": "enable_webhook",
-   "fieldtype": "Check",
-   "label": "Enable Webhook"
-  },
-  {
-   "depends_on": "enable_webhook",
-   "fieldname": "webhook_url",
+   "description": "Full topic name: projects/PROJECT_ID/topics/meet-events",
+   "fieldname": "pubsub_topic_name",
    "fieldtype": "Data",
-   "label": "Webhook URL",
+   "label": "Pub/Sub Topic Name"
+  },
+  {
+   "fieldname": "pubsub_subscription_endpoint",
+   "fieldtype": "Data",
+   "label": "Subscription Endpoint",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "meet_subscription_section",
+   "fieldtype": "Section Break",
+   "label": "Meet Events Subscription Status"
+  },
+  {
+   "fieldname": "meet_subscription_id",
+   "fieldtype": "Data",
+   "label": "Subscription ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "subscription_target_user",
+   "fieldtype": "Data",
+   "label": "Target User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "meet_subscription_state",
+   "fieldtype": "Data",
+   "label": "Subscription State",
    "read_only": 1
   }
  ],

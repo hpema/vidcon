@@ -11,7 +11,9 @@
   "column_break_1",
   "email",
   "full_name",
-  "attended"
+  "attended",
+  "joined_at",
+  "left_at"
  ],
  "fields": [
   {
@@ -60,6 +62,18 @@
    "fieldtype": "Check",
    "in_list_view": 1,
    "label": "Attended"
+  },
+  {
+   "fieldname": "joined_at",
+   "fieldtype": "Datetime",
+   "label": "Joined At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "left_at",
+   "fieldtype": "Datetime",
+   "label": "Left At",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
