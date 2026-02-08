@@ -8,6 +8,47 @@ import frappe
 from frappe import _
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+import requests
+
+
+# VidCon scopes required for Workspace Events API
+VIDCON_SCOPES = " ".join([
+	"https://www.googleapis.com/auth/calendar",
+	"https://www.googleapis.com/auth/meetings.space.readonly",
+	"https://www.googleapis.com/auth/drive.readonly"
+])
+
+
+def get_vidcon_access_token(google_calendar_name):
+	"""
+	Get access token with VidCon scopes (calendar, meet, drive).
+	
+	This bypasses Frappe's get_access_token() which only requests calendar scope.
+	"""
+	google_calendar = frappe.get_doc("Google Calendar", google_calendar_name)
+	google_settings = frappe.get_single("Google Settings")
+	
+	refresh_token = google_calendar.get_password("refresh_token", raise_exception=False)
+	if not refresh_token:
+		frappe.throw(_("Google Calendar is not authorized. Please authorize first."))
+	
+	# Request new access token with VidCon scopes
+	token_data = {
+		"client_id": google_settings.client_id,
+		"client_secret": google_settings.get_password("client_secret"),
+		"refresh_token": refresh_token,
+		"grant_type": "refresh_token",
+		"scope": VIDCON_SCOPES
+	}
+	
+	try:
+		response = requests.post("https://oauth2.googleapis.com/token", data=token_data)
+		response.raise_for_status()
+		tokens = response.json()
+		return tokens.get("access_token")
+	except Exception as e:
+		frappe.log_error(title="VidCon Token Refresh Failed", message=str(e))
+		frappe.throw(_("Failed to refresh access token: {0}").format(str(e)))
 
 
 def create_meet_subscription(google_calendar_name, user_email, pubsub_topic):
@@ -27,9 +68,9 @@ def create_meet_subscription(google_calendar_name, user_email, pubsub_topic):
 		google_calendar = frappe.get_doc("Google Calendar", google_calendar_name)
 		google_settings = frappe.get_single("Google Settings")
 		
-		# Build credentials (Frappe generates access_token on demand)
+		# Build credentials with VidCon scopes (calendar, meet, drive)
 		credentials = Credentials(
-			token=google_calendar.get_access_token(),
+			token=get_vidcon_access_token(google_calendar_name),
 			refresh_token=google_calendar.get_password("refresh_token"),
 			token_uri="https://oauth2.googleapis.com/token",
 			client_id=google_settings.client_id,
@@ -82,9 +123,9 @@ def delete_meet_subscription(google_calendar_name, subscription_id):
 		google_calendar = frappe.get_doc("Google Calendar", google_calendar_name)
 		google_settings = frappe.get_single("Google Settings")
 		
-		# Build credentials (Frappe generates access_token on demand)
+		# Build credentials with VidCon scopes (calendar, meet, drive)
 		credentials = Credentials(
-			token=google_calendar.get_access_token(),
+			token=get_vidcon_access_token(google_calendar_name),
 			refresh_token=google_calendar.get_password("refresh_token"),
 			token_uri="https://oauth2.googleapis.com/token",
 			client_id=google_settings.client_id,
@@ -120,9 +161,9 @@ def get_subscription_status(google_calendar_name, subscription_id):
 		google_calendar = frappe.get_doc("Google Calendar", google_calendar_name)
 		google_settings = frappe.get_single("Google Settings")
 		
-		# Build credentials (Frappe generates access_token on demand)
+		# Build credentials with VidCon scopes (calendar, meet, drive)
 		credentials = Credentials(
-			token=google_calendar.get_access_token(),
+			token=get_vidcon_access_token(google_calendar_name),
 			refresh_token=google_calendar.get_password("refresh_token"),
 			token_uri="https://oauth2.googleapis.com/token",
 			client_id=google_settings.client_id,
@@ -157,9 +198,9 @@ def list_subscriptions(google_calendar_name):
 		google_calendar = frappe.get_doc("Google Calendar", google_calendar_name)
 		google_settings = frappe.get_single("Google Settings")
 		
-		# Build credentials (Frappe generates access_token on demand)
+		# Build credentials with VidCon scopes (calendar, meet, drive)
 		credentials = Credentials(
-			token=google_calendar.get_access_token(),
+			token=get_vidcon_access_token(google_calendar_name),
 			refresh_token=google_calendar.get_password("refresh_token"),
 			token_uri="https://oauth2.googleapis.com/token",
 			client_id=google_settings.client_id,
