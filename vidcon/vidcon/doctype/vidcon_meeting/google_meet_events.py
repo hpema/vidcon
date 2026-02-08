@@ -61,7 +61,17 @@ def log_event(event_type, event_id, subscription_id, event_data, raw_payload):
 		frappe.db.commit()
 		
 	except Exception as e:
+		import traceback
+		error_details = {
+			"error": str(e),
+			"traceback": traceback.format_exc(),
+			"event_type": event_type,
+			"event_type_length": len(event_type) if event_type else 0,
+			"event_id": event_id,
+			"subscription_id": subscription_id
+		}
 		frappe.logger().error(f"Error logging event: {str(e)}")
+		frappe.log_error(title="Event Logging Failed", message=frappe.as_json(error_details, indent=2))
 
 
 @frappe.whitelist(allow_guest=True)
