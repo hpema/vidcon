@@ -715,8 +715,24 @@ def download_transcript_from_meet_api(meeting_name, transcript_name):
 		# Gemini notes are usually at the beginning of the transcript
 		gemini_notes = extract_gemini_notes(transcript_text)
 		
-		# Store transcript and notes
-		meeting_doc.transcript = transcript_text
+		# Save transcript as file attachment
+		file_name = f"transcript_{meeting_doc.name}_{frappe.utils.now_datetime().strftime('%Y%m%d_%H%M%S')}.txt"
+		
+		# Create file doc
+		file_doc = frappe.get_doc({
+			"doctype": "File",
+			"file_name": file_name,
+			"attached_to_doctype": "VidCon Meeting",
+			"attached_to_name": meeting_doc.name,
+			"attached_to_field": "transcript_file",
+			"content": transcript_text,
+			"is_private": 1
+		})
+		file_doc.save(ignore_permissions=True)
+		
+		print(f"✓ Transcript saved as attachment: {file_name}")
+		
+		# Update meeting with transcript metadata and notes
 		meeting_doc.transcript_file_id = document_id
 		meeting_doc.transcript_url = f"https://docs.google.com/document/d/{document_id}/view"
 		meeting_doc.transcript_retrieved_at = frappe.utils.now_datetime()
