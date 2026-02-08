@@ -141,12 +141,29 @@ def handle_pubsub_push():
 		else:
 			event_data = {}
 		
-		# Extract event type from the data payload (not attributes)
-		# Google Workspace Events sends eventType in the JSON data
-		event_type = event_data.get('eventType', '')
+		# Get attributes
+		attributes = pubsub_message.get('attributes', {})
+		
+		# Debug logging
+		print(f"\n=== Pub/Sub Message Received ===")
+		print(f"Raw Envelope: {json.dumps(envelope, indent=2)}")
+		print(f"\nAttributes: {json.dumps(attributes, indent=2)}")
+		print(f"Event Data Keys: {list(event_data.keys())}")
+		print(f"Event Data: {json.dumps(event_data, indent=2)}")
+		
+		# Extract event type - try multiple locations
+		# CloudEvents format uses 'type' in attributes
+		event_type = (
+			attributes.get('ce-type', '') or  # CloudEvents type in attributes
+			event_data.get('eventType', '') or  # eventType in data
+			event_data.get('type', '') or  # type in data
+			''
+		)
+		
+		print(f"Extracted event_type: '{event_type}'")
+		print(f"Event type length: {len(event_type)}")
 		
 		# Get event ID and subscription from attributes or data
-		attributes = pubsub_message.get('attributes', {})
 		event_id = attributes.get('ce-id', pubsub_message.get('messageId', ''))
 		subscription_id = envelope.get('subscription', '')
 		
