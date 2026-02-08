@@ -17,6 +17,26 @@ class VidConMeeting(Document):
 		else:
 			self.update_google_meet_event()
 	
+	def on_trash(self):
+		"""Clean up Google Calendar Event and Meet subscription when meeting is deleted"""
+		# Delete Google Calendar Event
+		if self.event:
+			try:
+				event_doc = frappe.get_doc("Event", self.event)
+				event_doc.delete(ignore_permissions=True)
+				frappe.logger().info(f"Deleted Event {self.event} for meeting {self.name}")
+			except Exception as e:
+				frappe.log_error(f"Error deleting Event {self.event}: {str(e)}")
+		
+		# Delete Meet Events subscription
+		if self.meet_subscription_id:
+			try:
+				from vidcon.vidcon.doctype.vidcon_meeting.meet_utils import delete_space_subscription
+				delete_space_subscription(self.meet_subscription_id)
+				frappe.logger().info(f"Deleted subscription {self.meet_subscription_id} for meeting {self.name}")
+			except Exception as e:
+				frappe.log_error(f"Error deleting subscription {self.meet_subscription_id}: {str(e)}")
+	
 	def calculate_duration(self):
 		"""Calculate meeting duration in minutes"""
 		if self.start_time and self.end_time:
