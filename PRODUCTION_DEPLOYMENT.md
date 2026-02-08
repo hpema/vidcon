@@ -5,13 +5,31 @@
 ### 1. Enable Required APIs
 Go to [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Library
 
-- [x] Google Calendar API (already enabled)
-- [ ] Google Meet API
-- [ ] Google Workspace Events API  
-- [ ] Google Drive API
-- [ ] Cloud Pub/Sub API
+Enable these APIs:
+- [x] **Google Calendar API** (already enabled)
+- [ ] **Google Meet API**
+- [ ] **Google Workspace Events API** (this is the key one!)
+- [ ] **Google Drive API**
+- [ ] **Cloud Pub/Sub API**
 
-### 2. Update OAuth Scopes
+### 2. Create Pub/Sub Topic
+Go to Pub/Sub → Topics → Create Topic
+
+- **Topic ID**: `meet-events` (or any name you prefer)
+- Note the full topic name: `projects/YOUR_PROJECT_ID/topics/meet-events`
+- **You'll need this full name for VidCon Settings**
+
+### 3. Grant Pub/Sub Publisher Permission
+In the topic details → Permissions tab:
+
+- Click **Add Principal**
+- Principal: `meet-api-notification-publisher@system.gserviceaccount.com`
+- Role: **Pub/Sub Publisher**
+- Save
+
+**Important**: This Google service account needs permission to publish Meet events to your topic.
+
+### 4. Update OAuth Scopes
 Go to APIs & Services → OAuth consent screen → Edit App → Scopes
 
 Add these scopes:
@@ -21,32 +39,9 @@ https://www.googleapis.com/auth/meetings.space.readonly
 https://www.googleapis.com/auth/drive.readonly
 ```
 
-### 3. Create Pub/Sub Topic
-Go to Pub/Sub → Topics → Create Topic
+Save the changes.
 
-- **Topic ID**: `meet-events`
-- **Full name**: `projects/YOUR_PROJECT_ID/topics/meet-events`
-- Copy the full topic name for VidCon Settings
-
-### 4. Grant Pub/Sub Publisher Permission
-In the topic details → Permissions tab:
-
-- Click **Add Principal**
-- Principal: `meet-api-event-push@system.gserviceaccount.com`
-- Role: **Pub/Sub Publisher**
-- Save
-
-### 5. Create Push Subscription
-In the topic details → Subscriptions → Create Subscription
-
-- **Subscription ID**: `meet-events-push`
-- **Delivery type**: Push
-- **Endpoint URL**: `https://YOUR_DOMAIN/api/method/vidcon.vidcon.doctype.vidcon_meeting.google_meet_events.handle_pubsub_push`
-- Click Create
-
-**Important**: Replace `YOUR_DOMAIN` with your actual production domain (e.g., `www.pema.co.za`)
-
-### 6. Update OAuth Redirect URIs
+### 5. Update OAuth Redirect URIs
 Go to APIs & Services → Credentials → Your OAuth 2.0 Client ID
 
 Add authorized redirect URI:
@@ -110,7 +105,9 @@ Should output: `Access token exists: True`
 2. Fill in required fields:
    - **Google Calendar**: Select your authorized calendar
    - **Meeting Organizer Email**: Your email (e.g., `you@yourdomain.com`)
-   - **Pub/Sub Topic Name**: `projects/YOUR_PROJECT_ID/topics/meet-events`
+   - **Pub/Sub Topic Name**: Paste the full topic name from step 2 above
+     - Format: `projects/YOUR_PROJECT_ID/topics/meet-events`
+     - Example: `projects/my-project-123456/topics/meet-events`
 3. **Don't check "Enable Meet Events" yet**
 4. Click **Save**
 
