@@ -51,13 +51,17 @@ def get_vidcon_access_token(google_calendar_name):
 		frappe.throw(_("Failed to refresh access token: {0}").format(str(e)))
 
 
-def create_meet_subscription(google_calendar_name, space_id, pubsub_topic):
+def create_meet_subscription(google_calendar_name, user_email, pubsub_topic):
 	"""
-	Create a Google Workspace Events subscription for a specific Meet space.
+	Create a Google Workspace Events subscription for a user's Meet conferences.
+	
+	NOTE: Space-based subscriptions don't work because we can't get the conference
+	record resource name until the meeting starts. User-based subscriptions monitor
+	all meetings where the user is the organizer.
 	
 	Args:
 		google_calendar_name: Name of the Google Calendar document
-		space_id: Meet space ID (e.g., 'abc-defg-hij' from meet.google.com/abc-defg-hij)
+		user_email: Email of the user to monitor (meeting organizer)
 		pubsub_topic: Full Pub/Sub topic name (projects/PROJECT_ID/topics/TOPIC)
 	
 	Returns:
@@ -81,10 +85,10 @@ def create_meet_subscription(google_calendar_name, space_id, pubsub_topic):
 		events_service = build('workspaceevents', 'v1', credentials=credentials, static_discovery=False)
 		
 		# Create subscription body
-		# For space-based subscriptions monitoring a specific meeting space
-		# Format: //meet.googleapis.com/spaces/{space_id}
+		# For user-based subscriptions monitoring all meetings where user is organizer
+		# Format: //meet.googleapis.com/users/{email}
 		subscription_body = {
-			"targetResource": f"//meet.googleapis.com/spaces/{space_id}",
+			"targetResource": f"//meet.googleapis.com/users/{user_email}",
 			"eventTypes": [
 				"google.workspace.meet.conference.v2.started",
 				"google.workspace.meet.conference.v2.ended",
