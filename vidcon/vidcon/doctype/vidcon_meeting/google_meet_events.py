@@ -115,7 +115,12 @@ def handle_pubsub_push():
 	"""
 	Handle incoming Pub/Sub push notifications from Google Workspace Events.
 	This is the webhook endpoint that receives Meet event notifications.
+	
+	Note: allow_guest=True is required for Pub/Sub push endpoint.
+	Security is handled by validating the Pub/Sub token in the request.
 	"""
+	# TODO: Add Pub/Sub token validation for production
+	# Validate the token from Pub/Sub subscription to ensure authenticity
 	try:
 		# Get the request data
 		envelope = frappe.local.form_dict
@@ -175,6 +180,9 @@ def handle_pubsub_push():
 		event_id = attributes.get('ce-id', pubsub_message.get('messageId', ''))
 		subscription_id = envelope.get('subscription', '')
 		
+		print(f"\n{'='*80}")
+		print(f"PROCESSING EVENT: {event_type}")
+		print(f"{'='*80}")
 		frappe.logger().info(f"Received Meet event: {event_type}")
 		
 		# Log the event to VidCon Event Log
@@ -188,19 +196,28 @@ def handle_pubsub_push():
 		
 		# Process the event based on type
 		if event_type == 'google.workspace.meet.conference.v2.started':
+			print(f"→ Calling handle_conference_started()")
 			handle_conference_started(event_data)
 		elif event_type == 'google.workspace.meet.conference.v2.ended':
+			print(f"→ Calling handle_conference_ended()")
 			handle_conference_ended(event_data)
 		elif event_type == 'google.workspace.meet.participant.v2.joined':
+			print(f"→ Calling handle_participant_joined()")
 			handle_participant_joined(event_data)
 		elif event_type == 'google.workspace.meet.participant.v2.left':
+			print(f"→ Calling handle_participant_left()")
 			handle_participant_left(event_data)
 		elif event_type == 'google.workspace.meet.recording.v2.fileGenerated':
+			print(f"→ Calling handle_recording_ready()")
 			handle_recording_ready(event_data)
 		elif event_type == 'google.workspace.meet.transcript.v2.fileGenerated':
+			print(f"→ Calling handle_transcript_ready()")
 			handle_transcript_ready(event_data)
 		else:
+			print(f"⚠ Unhandled event type: {event_type}")
 			frappe.logger().info(f"Unhandled event type: {event_type}")
+		
+		print(f"{'='*80}\n")
 		
 		# Always return 200 to acknowledge receipt
 		return {"status": "ok"}
@@ -341,30 +358,53 @@ def handle_conference_ended(event_data):
 	Update VidCon Meeting status and trigger transcript fetch.
 	"""
 	try:
+		print(f"\n=== HANDLING CONFERENCE ENDED ===")
+		print(f"Event data: {json.dumps(event_data, indent=2)}")
+		
 		# Extract conference details
 		conference_record = event_data.get('conferenceRecord', {})
-		conference_id = conference_record.get('name', '').split('/')[-1]
+		conference_name = conference_record.get('name', '')
+		conference_id = conference_name.split('/')[-1] if conference_name else ''
 		space_name = conference_record.get('space', '')
 		end_time = conference_record.get('endTime')
 		
-		frappe.logger().info(f"Conference ended: {conference_id}")
+		print(f"Conference ID: {conference_id}")
+		print(f"End time: {end_time}")
 		
-		# Find VidCon Meeting by conference ID or Meet link
+		# Find VidCon Meeting by conference ID
 		meetings = frappe.get_all(
 			"VidCon Meeting",
 			filters={
-				"google_meet_link": ["like", f"%{conference_id}%"],
+				"google_conference_id": conference_id,
 				"status": ["in", ["Scheduled", "In Progress"]]
 			},
-			fields=["name", "google_meet_link"]
+			fields=["name", "google_meet_link", "google_conference_id"]
 		)
+		
+		print(f"Found {len(meetings)} meetings by conference_id")
+		
+		# If not found, try all in-progress meetings
+		if not meetings:
+			print(f"No meetings found by conference_id, trying all in-progress meetings")
+			meetings = frappe.get_all(
+				"VidCon Meeting",
+				filters={"status": ["in", ["Scheduled", "In Progress"]]},
+				fields=["name", "google_meet_link", "google_conference_id"]
+			)
+			print(f"All in-progress meetings: {json.dumps(meetings, indent=2)}")
 		
 		for meeting in meetings:
 			meeting_doc = frappe.get_doc("VidCon Meeting", meeting.name)
+			
+			# Store conference ID if not already set
+			if not meeting_doc.google_conference_id:
+				meeting_doc.google_conference_id = conference_id
+			
 			meeting_doc.status = "Completed"
 			meeting_doc.actual_end_time = end_time
 			meeting_doc.save(ignore_permissions=True)
 			
+			print(f"✓ Meeting {meeting.name} marked as Completed")
 			frappe.logger().info(f"Meeting {meeting.name} marked as completed")
 			
 			# Enqueue transcript fetch after delay
@@ -381,10 +421,13 @@ def handle_conference_ended(event_data):
 				# Schedule for later based on delay
 				at_front=False
 			)
+			frappe.logger().info(f"Transcript fetch enqueued for {meeting.name} after {delay_minutes} minutes")
 		
 		frappe.db.commit()
+		print(f"=== CONFERENCE ENDED HANDLER COMPLETE ===\n")
 		
 	except Exception as e:
+		print(f"✗ Error handling conference ended: {str(e)}")
 		frappe.logger().error(f"Error handling conference ended: {str(e)}")
 		frappe.log_error(title="Conference Ended Handler Error", message=str(e))
 
@@ -428,10 +471,13 @@ def handle_transcript_ready(event_data):
 	Get transcript details from Meet API and download from Drive.
 	"""
 	try:
+		print(f"\n=== HANDLING TRANSCRIPT READY ===")
+		print(f"Event data: {json.dumps(event_data, indent=2)}")
+		
 		transcript = event_data.get('transcript', {})
 		transcript_name = transcript.get('name', '')
 		
-		print(f"Transcript ready: {transcript_name}")
+		print(f"Transcript name: {transcript_name}")
 		frappe.logger().info(f"Transcript ready: {transcript_name}")
 		
 		# Extract conference ID from transcript name
@@ -458,13 +504,21 @@ def handle_transcript_ready(event_data):
 				fields=["name"]
 			)
 		
+		print(f"Found {len(meetings)} meetings")
+		
 		for meeting in meetings:
+			print(f"Downloading transcript for meeting: {meeting.name}")
 			# Get transcript details from Meet API and download
 			download_transcript_from_meet_api(meeting.name, transcript_name)
 		
+		if not meetings:
+			print(f"✗ No meetings found for conference {conference_id}")
+		
 		frappe.db.commit()
+		print(f"=== TRANSCRIPT READY HANDLER COMPLETE ===\n")
 		
 	except Exception as e:
+		print(f"✗ Error handling transcript ready: {str(e)}")
 		frappe.logger().error(f"Error handling transcript ready: {str(e)}")
 		frappe.log_error(title="Transcript Ready Handler Error", message=str(e))
 
