@@ -110,12 +110,67 @@ class VidConMeeting(Document):
 	def after_insert(self):
 		"""Fetch Google Meet link and create subscription after event is created"""
 		if self.event:
-			# Trigger sync to Google Calendar and create subscription
-			frappe.enqueue(
-				"vidcon.vidcon.doctype.vidcon_meeting.vidcon_meeting.sync_event_and_fetch_meet_link",
-				meeting=self.name,
-				queue="short"
-			)
+			import time
+			
+			print(f"\n=== After Insert: {self.name} ===")
+			print(f"Event: {self.event}")
+			
+			# Wait for Event to sync with Google Calendar (max 10 seconds)
+			max_retries = 10
+			retry_count = 0
+			
+			while retry_count < max_retries:
+				event_doc = frappe.get_doc("Event", self.event)
+				
+				if event_doc.google_meet_link:
+					print(f"✓ Event synced with Google Calendar")
+					print(f"Meet Link: {event_doc.google_meet_link}")
+					
+					# Extract space_id from Meet link
+					space_id = event_doc.google_meet_link.split('/')[-1]
+					
+					# Update meeting with Meet link details
+					frappe.db.set_value("VidCon Meeting", self.name, {
+						"google_meet_link": event_doc.google_meet_link,
+						"google_calendar_event_id": event_doc.google_calendar_event_id,
+						"google_space_id": space_id
+					}, update_modified=False)
+					frappe.db.commit()
+					
+					print(f"✓ Synced Meet link to meeting")
+					
+					# Create Meet Events subscription if enabled
+					settings = frappe.get_single("VidCon Settings")
+					if settings.enable_meet_events:
+						from vidcon.vidcon.doctype.vidcon_meeting.meet_utils import create_space_subscription
+						
+						# Reload to get updated fields
+						self.reload()
+						
+						print(f"Creating Meet subscription...")
+						response = create_space_subscription(self)
+						
+						if response:
+							frappe.db.set_value("VidCon Meeting", self.name, "meet_subscription_id", 
+								response.get("name"), update_modified=False)
+							frappe.db.commit()
+							print(f"✓ Created Meet subscription: {response.get('name')}")
+						else:
+							print(f"✗ Subscription creation failed - check Error Log")
+					
+					print(f"=== After Insert Complete ===\n")
+					break
+				else:
+					retry_count += 1
+					if retry_count < max_retries:
+						print(f"Event not synced yet, waiting... (attempt {retry_count}/{max_retries})")
+						time.sleep(1)
+					else:
+						print(f"✗ Event did not sync with Google Calendar after {max_retries} seconds")
+						frappe.log_error(
+							title=f"Event Sync Timeout - {self.name}",
+							message=f"Event {self.event} did not get google_meet_link after {max_retries} seconds"
+						)
 	
 	def update_google_meet_event(self):
 		"""Update the linked Google Calendar Event"""
