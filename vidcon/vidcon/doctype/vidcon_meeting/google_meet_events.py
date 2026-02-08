@@ -394,25 +394,42 @@ def handle_recording_ready(event_data):
 def handle_transcript_ready(event_data):
 	"""
 	Handle transcript.fileGenerated event.
-	Download and store transcript in VidCon Meeting.
+	Get transcript details from Meet API and download from Drive.
 	"""
 	try:
 		transcript = event_data.get('transcript', {})
-		conference_id = transcript.get('conferenceRecord', '').split('/')[-1]
-		drive_file_id = transcript.get('driveDestination', {}).get('file', '').split('/')[-1]
+		transcript_name = transcript.get('name', '')
 		
-		frappe.logger().info(f"Transcript ready for conference: {conference_id}, file: {drive_file_id}")
+		print(f"Transcript ready: {transcript_name}")
+		frappe.logger().info(f"Transcript ready: {transcript_name}")
 		
-		# Find VidCon Meeting
+		# Extract conference ID from transcript name
+		# Format: conferenceRecords/{conferenceId}/transcripts/{transcriptId}
+		parts = transcript_name.split('/')
+		if len(parts) >= 2:
+			conference_id = parts[1]
+		else:
+			frappe.logger().error(f"Invalid transcript name format: {transcript_name}")
+			return
+		
+		# Find VidCon Meeting by conference ID
 		meetings = frappe.get_all(
 			"VidCon Meeting",
-			filters={"google_meet_link": ["like", f"%{conference_id}%"]},
+			filters={"google_conference_id": conference_id},
 			fields=["name"]
 		)
 		
+		if not meetings:
+			# Try finding by Meet link containing conference ID
+			meetings = frappe.get_all(
+				"VidCon Meeting",
+				filters={"google_meet_link": ["like", f"%{conference_id}%"]},
+				fields=["name"]
+			)
+		
 		for meeting in meetings:
-			# Download and store transcript
-			download_and_store_transcript(meeting.name, drive_file_id)
+			# Get transcript details from Meet API and download
+			download_transcript_from_meet_api(meeting.name, transcript_name)
 		
 		frappe.db.commit()
 		
@@ -531,6 +548,80 @@ def fetch_transcript_for_conference(conference_id, meeting_name):
 	except Exception as e:
 		frappe.logger().error(f"Error fetching transcript: {str(e)}")
 		frappe.log_error(title="Transcript Fetch Error", message=str(e))
+
+
+def download_transcript_from_meet_api(meeting_name, transcript_name):
+	"""
+	Get transcript details from Meet API and download from Drive.
+	
+	Args:
+		meeting_name: VidCon Meeting name
+		transcript_name: Full transcript resource name from Meet API
+	"""
+	try:
+		meeting_doc = frappe.get_doc("VidCon Meeting", meeting_name)
+		
+		# Get credentials
+		settings = frappe.get_single("VidCon Settings")
+		google_calendar = frappe.get_doc("Google Calendar", settings.google_calendar)
+		google_settings = frappe.get_single("Google Settings")
+		
+		# Build Meet API service
+		from google.oauth2.credentials import Credentials
+		from googleapiclient.discovery import build
+		from vidcon.vidcon.doctype.vidcon_meeting.subscription_manager import get_vidcon_access_token
+		
+		credentials = Credentials(
+			token=get_vidcon_access_token(settings.google_calendar),
+			refresh_token=google_calendar.get_password("refresh_token"),
+			token_uri="https://oauth2.googleapis.com/token",
+			client_id=google_settings.client_id,
+			client_secret=google_settings.get_password("client_secret")
+		)
+		
+		meet_service = build('meet', 'v2', credentials=credentials, static_discovery=False)
+		
+		# Get transcript details from Meet API
+		print(f"Getting transcript details: {transcript_name}")
+		transcript_details = meet_service.conferenceRecords().transcripts().get(
+			name=transcript_name
+		).execute()
+		
+		print(f"Transcript details: {json.dumps(transcript_details, indent=2)}")
+		
+		# Extract Drive file ID from transcript details
+		drive_destination = transcript_details.get('docsDestination', {})
+		document_id = drive_destination.get('document', '').split('/')[-1]
+		
+		if not document_id:
+			frappe.logger().error(f"No Drive document ID in transcript details: {transcript_details}")
+			return
+		
+		print(f"Drive document ID: {document_id}")
+		
+		# Download transcript from Drive
+		drive_service = build('drive', 'v3', credentials=credentials, static_discovery=False)
+		
+		# Export as plain text
+		request = drive_service.files().export(
+			fileId=document_id,
+			mimeType='text/plain'
+		)
+		transcript_content = request.execute()
+		
+		# Store transcript
+		meeting_doc.transcript = transcript_content.decode('utf-8') if isinstance(transcript_content, bytes) else transcript_content
+		meeting_doc.transcript_file_id = document_id
+		meeting_doc.transcript_url = f"https://docs.google.com/document/d/{document_id}/view"
+		meeting_doc.transcript_retrieved_at = frappe.utils.now_datetime()
+		meeting_doc.save(ignore_permissions=True)
+		
+		print(f"✓ Transcript downloaded and stored for {meeting_name}")
+		frappe.logger().info(f"Transcript downloaded and stored for {meeting_name}")
+		
+	except Exception as e:
+		frappe.logger().error(f"Error downloading transcript from Meet API: {str(e)}")
+		frappe.log_error(title="Transcript Download Error", message=str(e))
 
 
 def download_and_store_transcript(meeting_name, drive_file_id):
