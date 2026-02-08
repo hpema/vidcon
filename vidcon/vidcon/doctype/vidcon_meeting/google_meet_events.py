@@ -769,6 +769,19 @@ def extract_gemini_notes(transcript_text):
 	Extract Gemini-generated notes from transcript.
 	Google Meet's Gemini feature adds notes at the beginning of the transcript.
 	
+	Format:
+	📝 Notes
+	Meeting [date/time]
+	Summary
+	[summary text]
+	Details
+	[details]
+	Suggested next steps
+	[steps]
+	
+	📖 Transcript
+	[actual transcript]
+	
 	Args:
 		transcript_text: Full transcript text
 	
@@ -778,43 +791,31 @@ def extract_gemini_notes(transcript_text):
 	if not transcript_text:
 		return None
 	
-	# Gemini notes typically appear before the actual transcript
-	# They're usually marked with headers like "Summary", "Key points", etc.
-	# and separated from the transcript by a clear delimiter
-	
-	lines = transcript_text.split('\n')
-	notes_lines = []
-	transcript_started = False
-	
-	for i, line in enumerate(lines):
-		# Check if we've reached the actual transcript section
-		# Transcript usually starts with timestamps like "0:00:05" or speaker names
-		if not transcript_started:
-			# Look for patterns that indicate transcript has started
-			if any(pattern in line.lower() for pattern in ['transcript', 'speaker', '0:00:', 'participants']):
-				# Check if this is a header or actual transcript content
-				if i > 0 and len(notes_lines) > 0:
-					# We've collected some notes, and now hit the transcript section
-					transcript_started = True
-					continue
-			
-			# Collect potential notes lines
-			if line.strip():
-				notes_lines.append(line)
-		else:
-			# We've hit the transcript, stop collecting notes
-			break
-	
-	# If we collected notes, join them
-	if notes_lines and len(notes_lines) > 2:  # Need at least a few lines to be meaningful
-		notes = '\n'.join(notes_lines)
+	# Look for the Notes section marker
+	if '📝 Notes' in transcript_text or 'Notes' in transcript_text[:200]:
+		# Find where the transcript section starts
+		transcript_markers = ['📖 Transcript', 'Transcript\n', '\nTranscript\n']
 		
-		# Check if this looks like Gemini notes (contains summary-like content)
-		if any(keyword in notes.lower() for keyword in ['summary', 'key points', 'action items', 'decisions', 'overview']):
-			return notes
+		split_index = -1
+		for marker in transcript_markers:
+			if marker in transcript_text:
+				split_index = transcript_text.index(marker)
+				break
+		
+		if split_index > 0:
+			# Extract everything before the transcript section
+			notes_section = transcript_text[:split_index].strip()
+			
+			# Clean up - remove the "📝 Notes" header if present
+			if notes_section.startswith('📝 Notes'):
+				notes_section = notes_section[len('📝 Notes'):].strip()
+			
+			# Verify this looks like Gemini notes
+			if any(keyword in notes_section.lower() for keyword in ['summary', 'details', 'meeting']):
+				frappe.logger().info(f"Extracted Gemini notes: {len(notes_section)} characters")
+				return notes_section
 	
-	# If no clear notes section found, return None
-	# The entire transcript will still be stored in the transcript field
+	frappe.logger().warning("No Gemini notes section found in transcript")
 	return None
 
 
