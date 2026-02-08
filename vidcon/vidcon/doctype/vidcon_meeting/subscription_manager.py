@@ -23,16 +23,17 @@ def create_meet_subscription(google_calendar_name, user_email, pubsub_topic):
 		dict: Subscription response from Google API
 	"""
 	try:
-		# Get Google Calendar credentials
+		# Get Google Calendar and Google Settings
 		google_calendar = frappe.get_doc("Google Calendar", google_calendar_name)
+		google_settings = frappe.get_single("Google Settings")
 		
 		# Build credentials
 		credentials = Credentials(
 			token=google_calendar.get_password("access_token"),
 			refresh_token=google_calendar.get_password("refresh_token"),
 			token_uri="https://oauth2.googleapis.com/token",
-			client_id=google_calendar.client_id,
-			client_secret=google_calendar.get_password("client_secret")
+			client_id=google_settings.client_id,
+			client_secret=google_settings.get_password("client_secret")
 		)
 		
 		# Build Workspace Events API service
@@ -77,16 +78,17 @@ def delete_meet_subscription(google_calendar_name, subscription_id):
 		subscription_id: Full subscription name from Google API
 	"""
 	try:
-		# Get Google Calendar credentials
+		# Get Google Calendar and Google Settings
 		google_calendar = frappe.get_doc("Google Calendar", google_calendar_name)
+		google_settings = frappe.get_single("Google Settings")
 		
 		# Build credentials
 		credentials = Credentials(
 			token=google_calendar.get_password("access_token"),
 			refresh_token=google_calendar.get_password("refresh_token"),
 			token_uri="https://oauth2.googleapis.com/token",
-			client_id=google_calendar.client_id,
-			client_secret=google_calendar.get_password("client_secret")
+			client_id=google_settings.client_id,
+			client_secret=google_settings.get_password("client_secret")
 		)
 		
 		# Build Workspace Events API service
@@ -114,16 +116,17 @@ def get_subscription_status(google_calendar_name, subscription_id):
 		dict: Subscription details including state
 	"""
 	try:
-		# Get Google Calendar credentials
+		# Get Google Calendar and Google Settings
 		google_calendar = frappe.get_doc("Google Calendar", google_calendar_name)
+		google_settings = frappe.get_single("Google Settings")
 		
 		# Build credentials
 		credentials = Credentials(
 			token=google_calendar.get_password("access_token"),
 			refresh_token=google_calendar.get_password("refresh_token"),
 			token_uri="https://oauth2.googleapis.com/token",
-			client_id=google_calendar.client_id,
-			client_secret=google_calendar.get_password("client_secret")
+			client_id=google_settings.client_id,
+			client_secret=google_settings.get_password("client_secret")
 		)
 		
 		# Build Workspace Events API service
@@ -150,16 +153,17 @@ def list_subscriptions(google_calendar_name):
 		list: List of subscriptions
 	"""
 	try:
-		# Get Google Calendar credentials
+		# Get Google Calendar and Google Settings
 		google_calendar = frappe.get_doc("Google Calendar", google_calendar_name)
+		google_settings = frappe.get_single("Google Settings")
 		
 		# Build credentials
 		credentials = Credentials(
 			token=google_calendar.get_password("access_token"),
 			refresh_token=google_calendar.get_password("refresh_token"),
 			token_uri="https://oauth2.googleapis.com/token",
-			client_id=google_calendar.client_id,
-			client_secret=google_calendar.get_password("client_secret")
+			client_id=google_settings.client_id,
+			client_secret=google_settings.get_password("client_secret")
 		)
 		
 		# Build Workspace Events API service
