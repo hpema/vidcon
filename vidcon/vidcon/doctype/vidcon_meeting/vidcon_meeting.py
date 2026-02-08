@@ -88,9 +88,9 @@ class VidConMeeting(Document):
 			# We'll fetch it in after_insert
 	
 	def after_insert(self):
-		"""Fetch Google Meet link after event is created"""
+		"""Fetch Google Meet link and create subscription after event is created"""
 		if self.event:
-			# Trigger sync to Google Calendar
+			# Trigger sync to Google Calendar and create subscription
 			frappe.enqueue(
 				"vidcon.vidcon.doctype.vidcon_meeting.vidcon_meeting.sync_event_and_fetch_meet_link",
 				meeting=self.name,
@@ -154,6 +154,21 @@ def sync_event_and_fetch_meet_link(meeting):
 				"google_space_id": space_id
 			}, update_modified=False)
 			frappe.db.commit()
+			
+			# Create Meet Events subscription if enabled
+			settings = frappe.get_single("VidCon Settings")
+			if settings.enable_meet_events and not meeting_doc.meet_subscription_id:
+				from vidcon.vidcon.doctype.vidcon_meeting.meet_utils import create_space_subscription
+				
+				# Reload to get updated fields
+				meeting_doc.reload()
+				response = create_space_subscription(meeting_doc)
+				
+				if response:
+					frappe.db.set_value("VidCon Meeting", meeting, "meet_subscription_id", 
+						response.get("name"), update_modified=False)
+					frappe.db.commit()
+					frappe.logger().info(f"Created Meet subscription for {meeting}: {response.get('name')}")
 		else:
 			# Event might not be synced yet, retry after a few seconds
 			frappe.enqueue(
@@ -165,3 +180,49 @@ def sync_event_and_fetch_meet_link(meeting):
 			)
 	except Exception as e:
 		frappe.log_error(f"Error syncing Meet link for {meeting}: {str(e)}")
+
+
+@frappe.whitelist()
+def create_meet_subscription(meeting_name):
+	"""Create a Meet Events subscription for this meeting"""
+	from vidcon.vidcon.doctype.vidcon_meeting.meet_utils import create_space_subscription
+	
+	meeting = frappe.get_doc("VidCon Meeting", meeting_name)
+	meeting.check_permission("write")
+	
+	response = create_space_subscription(meeting)
+	
+	if response:
+		# Store subscription ID on meeting
+		meeting.db_set("meet_subscription_id", response.get("name"), update_modified=False)
+		
+		return {
+			"subscription_id": response.get("name"),
+			"state": response.get("state")
+		}
+	else:
+		frappe.throw(_("Failed to create subscription. Check Error Log for details."))
+
+
+@frappe.whitelist()
+def check_subscription_status(meeting_name):
+	"""Check the status of a meeting's subscription"""
+	from vidcon.vidcon.doctype.vidcon_meeting.subscription_manager import get_subscription_status
+	
+	meeting = frappe.get_doc("VidCon Meeting", meeting_name)
+	meeting.check_permission("read")
+	
+	if not meeting.meet_subscription_id:
+		frappe.throw(_("No subscription found for this meeting"))
+	
+	settings = frappe.get_single("VidCon Settings")
+	
+	status = get_subscription_status(
+		google_calendar_name=settings.google_calendar,
+		subscription_id=meeting.meet_subscription_id
+	)
+	
+	return {
+		"subscription_id": meeting.meet_subscription_id,
+		"state": status.get("state") if status else "UNKNOWN"
+	}

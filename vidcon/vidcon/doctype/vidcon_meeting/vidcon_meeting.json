@@ -23,6 +23,7 @@
   "column_break_3",
   "google_calendar_event_id",
   "google_conference_id",
+  "meet_subscription_id",
   "meeting_lifecycle_section",
   "actual_start_time",
   "actual_end_time",
@@ -149,6 +150,13 @@
    "fieldname": "google_conference_id",
    "fieldtype": "Data",
    "label": "Google Conference ID",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "meet_subscription_id",
+   "fieldtype": "Data",
+   "label": "Meet Subscription ID",
    "read_only": 1,
    "hidden": 1
   },
