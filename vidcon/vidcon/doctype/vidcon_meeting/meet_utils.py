@@ -62,12 +62,18 @@ def create_space_subscription(meeting_doc):
 		return None
 	
 	try:
-		from vidcon.vidcon.doctype.vidcon_meeting.subscription_manager import create_meet_subscription
+		from vidcon.vidcon.doctype.vidcon_meeting.subscription_manager import (
+			create_meet_subscription,
+			get_space_resource_name
+		)
 		
-		# Create subscription using spaces/{meetingCode} format
-		# According to Google's docs, meetingCode can be used as an alias for space ID
-		space_resource = f"spaces/{meeting_code}"
+		# Get the actual space resource name from Meet API
+		# The meeting code is just an alias, we need the real resource name
+		frappe.logger().info(f"Looking up space resource name for meeting code: {meeting_code}")
+		space_resource = get_space_resource_name(settings.google_calendar, meeting_code)
+		frappe.logger().info(f"Got space resource name: {space_resource}")
 		
+		# Create subscription using the actual space resource name
 		response = create_meet_subscription(
 			google_calendar_name=settings.google_calendar,
 			space_resource=space_resource,
@@ -81,7 +87,7 @@ def create_space_subscription(meeting_doc):
 	except Exception as e:
 		frappe.log_error(
 			title="Meet Subscription Creation Failed",
-			message=f"Meeting: {meeting_doc.name}\nSpace ID: {space_id}\nError: {str(e)}"
+			message=f"Meeting: {meeting_doc.name}\nMeeting Code: {meeting_code}\nMeet Link: {meeting_doc.google_meet_link}\nError: {str(e)}"
 		)
 		return None
 

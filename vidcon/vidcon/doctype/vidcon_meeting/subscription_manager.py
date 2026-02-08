@@ -51,25 +51,45 @@ def get_vidcon_access_token(google_calendar_name):
 		frappe.throw(_("Failed to refresh access token: {0}").format(str(e)))
 
 
-def get_cloud_identity_user_id(google_calendar_name, user_email):
+def get_space_resource_name(google_calendar_name, meeting_code):
 	"""
-	Get Cloud Identity user ID for an email address.
-	Required for creating user-based Meet subscriptions.
+	Get the actual space resource name from Meet API using the meeting code.
 	
-	According to Google's documentation, for Workspace accounts, the user ID
-	can be the email address itself when using cloudidentity.googleapis.com format.
+	The meeting code from the URL (e.g., 'uir-zdje-xqv') is an alias, not the actual
+	space resource name. We need to call Meet API to get the full resource name.
 	
 	Args:
 		google_calendar_name: Name of the Google Calendar document
-		user_email: Email address of the user
+		meeting_code: Meeting code from the Meet URL (e.g., 'uir-zdje-xqv')
 	
 	Returns:
-		str: User identifier (email for Workspace accounts)
+		str: Full space resource name (e.g., 'spaces/ABC123XYZ')
 	"""
-	# For Google Workspace accounts, the email address IS the valid user identifier
-	# when using the //cloudidentity.googleapis.com/users/{user} format
-	# Reference: https://developers.google.com/workspace/events/guides/events-meet
-	return user_email
+	try:
+		google_calendar = frappe.get_doc("Google Calendar", google_calendar_name)
+		google_settings = frappe.get_single("Google Settings")
+		
+		credentials = Credentials(
+			token=get_vidcon_access_token(google_calendar_name),
+			refresh_token=google_calendar.get_password("refresh_token"),
+			token_uri="https://oauth2.googleapis.com/token",
+			client_id=google_settings.client_id,
+			client_secret=google_settings.get_password("client_secret")
+		)
+		
+		# Build Meet API service
+		meet_service = build('meet', 'v2', credentials=credentials, static_discovery=False)
+		
+		# Get space using meeting code as alias
+		# According to Google docs, you can use spaces/{meetingCode} to get the space
+		space = meet_service.spaces().get(name=f"spaces/{meeting_code}").execute()
+		
+		# Return the actual space resource name
+		return space.get('name')  # This will be like 'spaces/ABC123XYZ'
+		
+	except Exception as e:
+		frappe.log_error(title="Meet Space Lookup Failed", message=f"Meeting code: {meeting_code}\nError: {str(e)}")
+		frappe.throw(_("Failed to get space resource name: {0}").format(str(e)))
 
 
 def create_meet_subscription(google_calendar_name, space_resource=None, user_email=None, pubsub_topic=None):
