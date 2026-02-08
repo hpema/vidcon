@@ -3,6 +3,67 @@ from frappe import _
 import json
 import base64
 
+
+def log_event(event_type, event_id, subscription_id, event_data, raw_payload):
+	"""
+	Log incoming Pub/Sub event to VidCon Event Log for monitoring.
+	"""
+	try:
+		# Extract space_id and conference_id from event data
+		space_id = None
+		conference_id = None
+		meeting = None
+		
+		# Parse based on event structure
+		if 'conferenceRecord' in event_data:
+			conference_name = event_data['conferenceRecord'].get('name', '')
+			if conference_name:
+				conference_id = conference_name.split('/')[-1]
+				# Try to find meeting by conference_id
+				meetings = frappe.get_all(
+					"VidCon Meeting",
+					filters={"google_conference_id": conference_id},
+					limit=1
+				)
+				if meetings:
+					meeting = meetings[0].name
+		
+		elif 'participantSession' in event_data:
+			session_name = event_data['participantSession'].get('name', '')
+			if session_name:
+				# Format: conferenceRecords/CONF_ID/participants/PART_ID/participantSessions/SESSION_ID
+				parts = session_name.split('/')
+				if len(parts) >= 2:
+					conference_id = parts[1]
+					# Try to find meeting by conference_id
+					meetings = frappe.get_all(
+						"VidCon Meeting",
+						filters={"google_conference_id": conference_id},
+						limit=1
+					)
+					if meetings:
+						meeting = meetings[0].name
+		
+		# Create event log
+		log = frappe.get_doc({
+			"doctype": "VidCon Event Log",
+			"event_type": event_type,
+			"event_id": event_id,
+			"subscription_id": subscription_id,
+			"received_at": frappe.utils.now(),
+			"status": "Received",
+			"space_id": space_id,
+			"conference_id": conference_id,
+			"meeting": meeting,
+			"raw_payload": raw_payload
+		})
+		log.insert(ignore_permissions=True)
+		frappe.db.commit()
+		
+	except Exception as e:
+		frappe.logger().error(f"Error logging event: {str(e)}")
+
+
 @frappe.whitelist(allow_guest=True)
 def handle_pubsub_push():
 	"""
@@ -37,12 +98,29 @@ def handle_pubsub_push():
 		# Get event attributes
 		attributes = pubsub_message.get('attributes', {})
 		event_type = attributes.get('ce-type', '')
+		event_id = attributes.get('ce-id', '')
+		subscription_id = attributes.get('ce-source', '')
 		
 		frappe.logger().info(f"Received Meet event: {event_type}")
 		
+		# Log the event to VidCon Event Log
+		log_event(
+			event_type=event_type,
+			event_id=event_id,
+			subscription_id=subscription_id,
+			event_data=event_data,
+			raw_payload=json.dumps(envelope, indent=2)
+		)
+		
 		# Process the event based on type
-		if event_type == 'google.workspace.meet.conference.v2.ended':
+		if event_type == 'google.workspace.meet.conference.v2.started':
+			handle_conference_started(event_data)
+		elif event_type == 'google.workspace.meet.conference.v2.ended':
 			handle_conference_ended(event_data)
+		elif event_type == 'google.workspace.meet.participant.v2.joined':
+			handle_participant_joined(event_data)
+		elif event_type == 'google.workspace.meet.participant.v2.left':
+			handle_participant_left(event_data)
 		elif event_type == 'google.workspace.meet.recording.v2.fileGenerated':
 			handle_recording_ready(event_data)
 		elif event_type == 'google.workspace.meet.transcript.v2.fileGenerated':
@@ -58,6 +136,98 @@ def handle_pubsub_push():
 		frappe.log_error(title="Pub/Sub Handler Error", message=str(e))
 		# Return 200 to prevent Pub/Sub from retrying
 		return {"status": "error", "message": str(e)}
+
+
+def handle_conference_started(event_data):
+	"""
+	Handle conference.started event.
+	Update VidCon Meeting status to In Progress.
+	"""
+	try:
+		# Extract conference details
+		conference_record = event_data.get('conferenceRecord', {})
+		conference_id = conference_record.get('name', '').split('/')[-1]
+		start_time = conference_record.get('startTime')
+		
+		frappe.logger().info(f"Conference started: {conference_id}")
+		
+		# Find VidCon Meeting by conference ID
+		meetings = frappe.get_all(
+			"VidCon Meeting",
+			filters={
+				"google_conference_id": conference_id,
+				"status": "Scheduled"
+			},
+			fields=["name"]
+		)
+		
+		for meeting in meetings:
+			meeting_doc = frappe.get_doc("VidCon Meeting", meeting.name)
+			meeting_doc.status = "In Progress"
+			meeting_doc.actual_start_time = start_time
+			meeting_doc.save(ignore_permissions=True)
+			frappe.logger().info(f"Meeting {meeting.name} marked as In Progress")
+		
+		frappe.db.commit()
+		
+	except Exception as e:
+		frappe.logger().error(f"Error handling conference started: {str(e)}")
+		frappe.log_error(title="Conference Started Handler Error", message=str(e))
+
+
+def handle_participant_joined(event_data):
+	"""
+	Handle participant.joined event.
+	Create or update attendee record.
+	"""
+	try:
+		# Extract participant details
+		participant_session = event_data.get('participantSession', {})
+		session_name = participant_session.get('name', '')
+		
+		# Parse: conferenceRecords/CONF_ID/participants/PART_ID/participantSessions/SESSION_ID
+		parts = session_name.split('/')
+		if len(parts) >= 2:
+			conference_id = parts[1]
+			
+			frappe.logger().info(f"Participant joined conference: {conference_id}")
+			
+			# TODO: Implement attendee tracking
+			# - Find VidCon Meeting by conference_id
+			# - Extract participant email/name from session data
+			# - Create/update VidCon Meeting Attendee record
+			# - Set joined_at timestamp
+		
+	except Exception as e:
+		frappe.logger().error(f"Error handling participant joined: {str(e)}")
+		frappe.log_error(title="Participant Joined Handler Error", message=str(e))
+
+
+def handle_participant_left(event_data):
+	"""
+	Handle participant.left event.
+	Update attendee record with left timestamp.
+	"""
+	try:
+		# Extract participant details
+		participant_session = event_data.get('participantSession', {})
+		session_name = participant_session.get('name', '')
+		
+		# Parse: conferenceRecords/CONF_ID/participants/PART_ID/participantSessions/SESSION_ID
+		parts = session_name.split('/')
+		if len(parts) >= 2:
+			conference_id = parts[1]
+			
+			frappe.logger().info(f"Participant left conference: {conference_id}")
+			
+			# TODO: Implement attendee tracking
+			# - Find VidCon Meeting by conference_id
+			# - Find attendee record by participant session
+			# - Set left_at timestamp
+		
+	except Exception as e:
+		frappe.logger().error(f"Error handling participant left: {str(e)}")
+		frappe.log_error(title="Participant Left Handler Error", message=str(e))
 
 
 def handle_conference_ended(event_data):

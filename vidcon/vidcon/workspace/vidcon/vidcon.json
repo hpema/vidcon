@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\":\"vC1mEeTiNg\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Meetings</b></span>\",\"col\":12}},{\"id\":\"vCmTg12345\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"VidCon Meeting\",\"col\":3}},{\"id\":\"eVeNt12345\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Event\",\"col\":3}},{\"id\":\"sPaCeR1234\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Settings</b></span>\",\"col\":12}},{\"id\":\"sEtTiNg123\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"VidCon Settings\",\"col\":3}},{\"id\":\"gOoGlE1234\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Google Calendar\",\"col\":3}}]",
+ "content": "[{\"id\":\"vC1mEeTiNg\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Meetings</b></span>\",\"col\":12}},{\"id\":\"vCmTg12345\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"VidCon Meeting\",\"col\":3}},{\"id\":\"eVeNt12345\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Event\",\"col\":3}},{\"id\":\"eVlOg12345\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"VidCon Event Log\",\"col\":3}},{\"id\":\"sPaCeR1234\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Settings</b></span>\",\"col\":12}},{\"id\":\"sEtTiNg123\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"VidCon Settings\",\"col\":3}},{\"id\":\"gOoGlE1234\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Google Calendar\",\"col\":3}}]",
  "creation": "2026-02-07 19:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -36,6 +36,13 @@
    "doc_view": "List",
    "label": "Event",
    "link_to": "Event",
+   "type": "DocType"
+  },
+  {
+   "color": "Purple",
+   "doc_view": "List",
+   "label": "VidCon Event Log",
+   "link_to": "VidCon Event Log",
    "type": "DocType"
   },
   {
