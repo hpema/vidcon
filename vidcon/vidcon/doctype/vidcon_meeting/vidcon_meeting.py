@@ -177,18 +177,21 @@ def sync_event_and_fetch_meet_link(meeting):
 			
 			# Create Meet Events subscription if enabled
 			settings = frappe.get_single("VidCon Settings")
-			if settings.enable_meet_events and not meeting_doc.meet_subscription_id:
+			if settings.enable_meet_events:
 				from vidcon.vidcon.doctype.vidcon_meeting.meet_utils import create_space_subscription
 				
 				# Reload to get updated fields
 				meeting_doc.reload()
-				response = create_space_subscription(meeting_doc)
 				
-				if response:
-					frappe.db.set_value("VidCon Meeting", meeting, "meet_subscription_id", 
-						response.get("name"), update_modified=False)
-					frappe.db.commit()
-					frappe.logger().info(f"Created Meet subscription for {meeting}: {response.get('name')}")
+				# Only create if subscription doesn't exist yet
+				if not meeting_doc.meet_subscription_id:
+					response = create_space_subscription(meeting_doc)
+					
+					if response:
+						frappe.db.set_value("VidCon Meeting", meeting, "meet_subscription_id", 
+							response.get("name"), update_modified=False)
+						frappe.db.commit()
+						frappe.logger().info(f"Created Meet subscription for {meeting}: {response.get('name')}")
 		else:
 			# Event might not be synced yet, retry after a few seconds
 			frappe.enqueue(
