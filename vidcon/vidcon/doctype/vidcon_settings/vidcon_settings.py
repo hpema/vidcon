@@ -4,7 +4,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import get_url
+from frappe.utils import get_url, now_datetime
 
 
 class VidConSettings(Document):
@@ -41,3 +41,111 @@ class VidConSettings(Document):
 				frappe.msgprint(_(
 					"Meet Events enabled! Subscriptions will be created automatically for each VidCon Meeting with a Google Meet link."
 				), alert=True, indicator="green")
+
+
+@frappe.whitelist()
+def test_webhook_endpoint():
+	"""
+	Test the Pub/Sub webhook endpoint by sending a test message.
+	This verifies that the endpoint is accessible and processing messages.
+	"""
+	import requests
+	import base64
+	import json
+	
+	settings = frappe.get_single("VidCon Settings")
+	endpoint_url = settings.pubsub_subscription_endpoint
+	
+	# Create a test Pub/Sub message
+	test_event = {
+		"@type": "type.googleapis.com/google.apps.events.subscriptions.v1.EventPayload",
+		"eventType": "google.workspace.meet.conference.v2.started",
+		"conferenceRecord": {
+			"name": "conferenceRecords/test-conference-123",
+			"startTime": now_datetime().isoformat()
+		}
+	}
+	
+	# Encode as base64 (Pub/Sub format)
+	test_data = base64.b64encode(json.dumps(test_event).encode()).decode()
+	
+	# Create Pub/Sub envelope
+	pubsub_message = {
+		"message": {
+			"data": test_data,
+			"messageId": "test-message-" + frappe.generate_hash(length=10),
+			"publishTime": now_datetime().isoformat() + "Z"
+		}
+	}
+	
+	try:
+		# Send POST request to webhook
+		response = requests.post(
+			endpoint_url,
+			json=pubsub_message,
+			headers={"Content-Type": "application/json"},
+			timeout=10
+		)
+		
+		if response.status_code == 200:
+			# Check if event was logged
+			recent_events = frappe.get_all(
+				"VidCon Event Log",
+				filters={"event_type": "google.workspace.meet.conference.v2.started"},
+				order_by="received_at desc",
+				limit=1
+			)
+			
+			if recent_events:
+				return {
+					"success": True,
+					"message": "Webhook test successful! Event was received and logged.",
+					"event_log_id": recent_events[0].name,
+					"status_code": response.status_code
+				}
+			else:
+				return {
+					"success": False,
+					"message": "Webhook responded but event was not logged. Check Error Log.",
+					"status_code": response.status_code
+				}
+		else:
+			return {
+				"success": False,
+				"message": f"Webhook returned error: {response.status_code}",
+				"status_code": response.status_code,
+				"response": response.text[:500]
+			}
+			
+	except Exception as e:
+		frappe.log_error(title="Webhook Test Failed", message=str(e))
+		return {
+			"success": False,
+			"message": f"Failed to reach webhook: {str(e)}"
+		}
+
+
+@frappe.whitelist()
+def get_recent_events_status():
+	"""
+	Get status of recent events to show in VidCon Settings.
+	"""
+	# Get last 5 events
+	events = frappe.get_all(
+		"VidCon Event Log",
+		fields=["name", "event_type", "received_at", "status"],
+		order_by="received_at desc",
+		limit=5
+	)
+	
+	# Get total event count
+	total_events = frappe.db.count("VidCon Event Log")
+	
+	# Get last event time
+	last_event = events[0] if events else None
+	
+	return {
+		"total_events": total_events,
+		"last_event_time": last_event.get("received_at") if last_event else None,
+		"recent_events": events
+	}
