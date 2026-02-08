@@ -687,18 +687,44 @@ def download_transcript_from_meet_api(meeting_name, transcript_name):
 		# Download transcript from Drive
 		drive_service = build('drive', 'v3', credentials=credentials, static_discovery=False)
 		
-		# Export as plain text
+		# Get file metadata to check for Gemini notes
+		file_metadata = drive_service.files().get(
+			fileId=document_id,
+			fields='name,description,properties'
+		).execute()
+		
+		print(f"File metadata: {json.dumps(file_metadata, indent=2)}")
+		
+		# Export transcript as plain text
 		request = drive_service.files().export(
 			fileId=document_id,
 			mimeType='text/plain'
 		)
 		transcript_content = request.execute()
 		
-		# Store transcript
-		meeting_doc.transcript = transcript_content.decode('utf-8') if isinstance(transcript_content, bytes) else transcript_content
+		# Decode transcript content
+		if isinstance(transcript_content, bytes):
+			transcript_text = transcript_content.decode('utf-8')
+		else:
+			transcript_text = transcript_content
+		
+		print(f"Transcript length: {len(transcript_text)} characters")
+		print(f"Transcript preview (first 500 chars):\n{transcript_text[:500]}")
+		
+		# Try to extract Gemini notes from transcript
+		# Gemini notes are usually at the beginning of the transcript
+		gemini_notes = extract_gemini_notes(transcript_text)
+		
+		# Store transcript and notes
+		meeting_doc.transcript = transcript_text
 		meeting_doc.transcript_file_id = document_id
 		meeting_doc.transcript_url = f"https://docs.google.com/document/d/{document_id}/view"
 		meeting_doc.transcript_retrieved_at = frappe.utils.now_datetime()
+		
+		if gemini_notes:
+			meeting_doc.notes = gemini_notes
+			print(f"✓ Extracted Gemini notes ({len(gemini_notes)} characters)")
+		
 		meeting_doc.save(ignore_permissions=True)
 		
 		print(f"✓ Transcript downloaded and stored for {meeting_name}")
@@ -707,6 +733,60 @@ def download_transcript_from_meet_api(meeting_name, transcript_name):
 	except Exception as e:
 		frappe.logger().error(f"Error downloading transcript from Meet API: {str(e)}")
 		frappe.log_error(title="Transcript Download Error", message=str(e))
+
+
+def extract_gemini_notes(transcript_text):
+	"""
+	Extract Gemini-generated notes from transcript.
+	Google Meet's Gemini feature adds notes at the beginning of the transcript.
+	
+	Args:
+		transcript_text: Full transcript text
+	
+	Returns:
+		str: Extracted Gemini notes or None
+	"""
+	if not transcript_text:
+		return None
+	
+	# Gemini notes typically appear before the actual transcript
+	# They're usually marked with headers like "Summary", "Key points", etc.
+	# and separated from the transcript by a clear delimiter
+	
+	lines = transcript_text.split('\n')
+	notes_lines = []
+	transcript_started = False
+	
+	for i, line in enumerate(lines):
+		# Check if we've reached the actual transcript section
+		# Transcript usually starts with timestamps like "0:00:05" or speaker names
+		if not transcript_started:
+			# Look for patterns that indicate transcript has started
+			if any(pattern in line.lower() for pattern in ['transcript', 'speaker', '0:00:', 'participants']):
+				# Check if this is a header or actual transcript content
+				if i > 0 and len(notes_lines) > 0:
+					# We've collected some notes, and now hit the transcript section
+					transcript_started = True
+					continue
+			
+			# Collect potential notes lines
+			if line.strip():
+				notes_lines.append(line)
+		else:
+			# We've hit the transcript, stop collecting notes
+			break
+	
+	# If we collected notes, join them
+	if notes_lines and len(notes_lines) > 2:  # Need at least a few lines to be meaningful
+		notes = '\n'.join(notes_lines)
+		
+		# Check if this looks like Gemini notes (contains summary-like content)
+		if any(keyword in notes.lower() for keyword in ['summary', 'key points', 'action items', 'decisions', 'overview']):
+			return notes
+	
+	# If no clear notes section found, return None
+	# The entire transcript will still be stored in the transcript field
+	return None
 
 
 def download_and_store_transcript(meeting_name, drive_file_id):
