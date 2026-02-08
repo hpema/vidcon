@@ -155,15 +155,22 @@ class VidConMeeting(Document):
 def sync_event_and_fetch_meet_link(meeting):
 	"""Background job to sync event and fetch Meet link"""
 	try:
+		print(f"\n=== SYNC JOB STARTED for {meeting} ===")
 		meeting_doc = frappe.get_doc("VidCon Meeting", meeting)
 		
 		if not meeting_doc.event:
+			print(f"No event linked to meeting {meeting}")
 			return
 		
+		print(f"Event: {meeting_doc.event}")
 		event_doc = frappe.get_doc("Event", meeting_doc.event)
+		print(f"Event google_meet_link: {event_doc.google_meet_link}")
+		print(f"Event google_calendar_event_id: {event_doc.google_calendar_event_id}")
 		
 		# Check if event has google_meet_link
 		if event_doc.google_meet_link:
+			print(f"Event has Meet link, syncing to meeting...")
+			
 			# Extract space_id from Meet link
 			# Format: https://meet.google.com/abc-defg-hij
 			space_id = event_doc.google_meet_link.split('/')[-1] if event_doc.google_meet_link else None
@@ -174,9 +181,12 @@ def sync_event_and_fetch_meet_link(meeting):
 				"google_space_id": space_id
 			}, update_modified=False)
 			frappe.db.commit()
+			print(f"Synced Meet link to meeting: {event_doc.google_meet_link}")
 			
 			# Create Meet Events subscription if enabled
 			settings = frappe.get_single("VidCon Settings")
+			print(f"Meet Events enabled: {settings.enable_meet_events}")
+			
 			if settings.enable_meet_events:
 				from vidcon.vidcon.doctype.vidcon_meeting.meet_utils import create_space_subscription
 				
@@ -185,14 +195,21 @@ def sync_event_and_fetch_meet_link(meeting):
 				
 				# Only create if subscription doesn't exist yet
 				if not meeting_doc.meet_subscription_id:
+					print(f"Creating Meet subscription...")
 					response = create_space_subscription(meeting_doc)
 					
 					if response:
 						frappe.db.set_value("VidCon Meeting", meeting, "meet_subscription_id", 
 							response.get("name"), update_modified=False)
 						frappe.db.commit()
+						print(f"✓ Created Meet subscription: {response.get('name')}")
 						frappe.logger().info(f"Created Meet subscription for {meeting}: {response.get('name')}")
+					else:
+						print(f"✗ Subscription creation failed - check Error Log")
+				else:
+					print(f"Subscription already exists: {meeting_doc.meet_subscription_id}")
 		else:
+			print(f"Event doesn't have google_meet_link yet, retrying...")
 			# Event might not be synced yet, retry after a few seconds
 			frappe.enqueue(
 				"vidcon.vidcon.doctype.vidcon_meeting.vidcon_meeting.sync_event_and_fetch_meet_link",
@@ -201,8 +218,11 @@ def sync_event_and_fetch_meet_link(meeting):
 				at_front=False,
 				enqueue_after_commit=True
 			)
+		
+		print(f"=== SYNC JOB COMPLETED for {meeting} ===\n")
 	except Exception as e:
-		frappe.log_error(f"Error syncing Meet link for {meeting}: {str(e)}")
+		print(f"✗ ERROR in sync job: {str(e)}")
+		frappe.log_error(title=f"Sync Meet Link Failed - {meeting}", message=str(e))
 
 
 @frappe.whitelist()
