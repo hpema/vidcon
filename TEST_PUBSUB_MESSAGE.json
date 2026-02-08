@@ -1,0 +1,9 @@
+{
+  "@type": "type.googleapis.com/google.apps.events.subscriptions.v1.EventPayload",
+  "eventType": "google.workspace.meet.conference.v2.started",
+  "conferenceRecord": {
+    "name": "conferenceRecords/test-conference-from-console",
+    "startTime": "2026-02-08T13:10:00Z",
+    "space": "spaces/test-space-abc"
+  }
+}
