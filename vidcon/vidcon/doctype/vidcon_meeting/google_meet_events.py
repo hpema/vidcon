@@ -9,14 +9,14 @@ def log_event(event_type, event_id, subscription_id, event_data, raw_payload):
 	Log incoming Pub/Sub event to VidCon Event Log for monitoring.
 	"""
 	try:
-		print("\n" + "="*80)
-		print("LOG_EVENT CALLED")
-		print(f"event_type: {event_type}")
-		print(f"event_type length: {len(event_type) if event_type else 0}")
-		print(f"event_type type: {type(event_type)}")
-		print(f"event_id: {event_id}")
-		print(f"subscription_id: {subscription_id}")
-		print("="*80 + "\n")
+		frappe.logger().info("\n" + "="*80)
+		frappe.logger().info("LOG_EVENT CALLED")
+		frappe.logger().info(f"event_type: {event_type}")
+		frappe.logger().info(f"event_type length: {len(event_type) if event_type else 0}")
+		frappe.logger().info(f"event_type type: {type(event_type)}")
+		frappe.logger().info(f"event_id: {event_id}")
+		frappe.logger().info(f"subscription_id: {subscription_id}")
+		frappe.logger().info("="*80 + "\n")
 		
 		# Extract space_id and conference_id from event data
 		space_id = None
@@ -28,7 +28,7 @@ def log_event(event_type, event_id, subscription_id, event_data, raw_payload):
 			conference_name = event_data['conferenceRecord'].get('name', '')
 			if conference_name:
 				conference_id = conference_name.split('/')[-1]
-				print(f"Extracted conference_id: {conference_id}")
+				frappe.logger().info(f"Extracted conference_id: {conference_id}")
 				# Try to find meeting by conference_id
 				meetings = frappe.get_all(
 					"VidCon Meeting",
@@ -37,7 +37,7 @@ def log_event(event_type, event_id, subscription_id, event_data, raw_payload):
 				)
 				if meetings:
 					meeting = meetings[0].name
-					print(f"Found meeting: {meeting}")
+					frappe.logger().info(f"Found meeting: {meeting}")
 		
 		elif 'participantSession' in event_data:
 			session_name = event_data['participantSession'].get('name', '')
@@ -46,7 +46,7 @@ def log_event(event_type, event_id, subscription_id, event_data, raw_payload):
 				parts = session_name.split('/')
 				if len(parts) >= 2:
 					conference_id = parts[1]
-					print(f"Extracted conference_id from session: {conference_id}")
+					frappe.logger().info(f"Extracted conference_id from session: {conference_id}")
 					# Try to find meeting by conference_id
 					meetings = frappe.get_all(
 						"VidCon Meeting",
@@ -55,16 +55,16 @@ def log_event(event_type, event_id, subscription_id, event_data, raw_payload):
 					)
 					if meetings:
 						meeting = meetings[0].name
-						print(f"Found meeting: {meeting}")
+						frappe.logger().info(f"Found meeting: {meeting}")
 		
-		print("\nCreating VidCon Event Log document...")
-		print(f"  event_type: '{event_type}' (len={len(event_type) if event_type else 0})")
-		print(f"  event_id: '{event_id}'")
-		print(f"  subscription_id: '{subscription_id}'")
-		print(f"  space_id: '{space_id}'")
-		print(f"  conference_id: '{conference_id}'")
-		print(f"  meeting: '{meeting}'")
-		print(f"  raw_payload length: {len(raw_payload) if raw_payload else 0}")
+		frappe.logger().info("\nCreating VidCon Event Log document...")
+		frappe.logger().info(f"  event_type: '{event_type}' (len={len(event_type) if event_type else 0})")
+		frappe.logger().info(f"  event_id: '{event_id}'")
+		frappe.logger().info(f"  subscription_id: '{subscription_id}'")
+		frappe.logger().info(f"  space_id: '{space_id}'")
+		frappe.logger().info(f"  conference_id: '{conference_id}'")
+		frappe.logger().info(f"  meeting: '{meeting}'")
+		frappe.logger().info(f"  raw_payload length: {len(raw_payload) if raw_payload else 0}")
 		
 		# Create event log
 		log = frappe.get_doc({
@@ -80,23 +80,23 @@ def log_event(event_type, event_id, subscription_id, event_data, raw_payload):
 			"raw_payload": raw_payload
 		})
 		
-		print("Document created, calling insert()...")
+		frappe.logger().info("Document created, calling insert()...")
 		log.insert(ignore_permissions=True)
-		print(f"Insert successful! Log name: {log.name}")
+		frappe.logger().info(f"Insert successful! Log name: {log.name}")
 		
 		frappe.db.commit()
-		print("Commit successful!")
-		print("="*80 + "\n")
+		frappe.logger().info("Commit successful!")
+		frappe.logger().info("="*80 + "\n")
 		
 	except Exception as e:
 		import traceback
-		print("\n" + "!"*80)
-		print("ERROR IN LOG_EVENT!")
-		print(f"Exception type: {type(e).__name__}")
-		print(f"Exception message: {str(e)}")
-		print(f"\nFull traceback:")
-		print(traceback.format_exc())
-		print("!"*80 + "\n")
+		frappe.logger().info("\n" + "!"*80)
+		frappe.logger().info("ERROR IN LOG_EVENT!")
+		frappe.logger().info(f"Exception type: {type(e).__name__}")
+		frappe.logger().info(f"Exception message: {str(e)}")
+		frappe.logger().info(f"\nFull traceback:")
+		frappe.logger().info(traceback.format_exc())
+		frappe.logger().info("!"*80 + "\n")
 		
 		error_details = {
 			"error": str(e),
@@ -126,11 +126,11 @@ def handle_pubsub_push():
 		envelope = frappe.local.form_dict
 		
 		# Log raw incoming message
-		print(f"\n{'='*80}")
-		print(f"RAW INCOMING PUB/SUB MESSAGE")
-		print(f"{'='*80}")
-		print(json.dumps(envelope, indent=2))
-		print(f"{'='*80}\n")
+		frappe.logger().info(f"\n{'='*80}")
+		frappe.logger().info(f"RAW INCOMING PUB/SUB MESSAGE")
+		frappe.logger().info(f"{'='*80}")
+		frappe.logger().info(json.dumps(envelope, indent=2))
+		frappe.logger().info(f"{'='*80}\n")
 		
 		# Get the Pub/Sub message from request
 		envelope = frappe.request.get_json()
@@ -158,11 +158,11 @@ def handle_pubsub_push():
 		attributes = pubsub_message.get('attributes', {})
 		
 		# Debug logging
-		print(f"\n=== Pub/Sub Message Received ===")
-		print(f"Raw Envelope: {json.dumps(envelope, indent=2)}")
-		print(f"\nAttributes: {json.dumps(attributes, indent=2)}")
-		print(f"Event Data Keys: {list(event_data.keys())}")
-		print(f"Event Data: {json.dumps(event_data, indent=2)}")
+		frappe.logger().info(f"\n=== Pub/Sub Message Received ===")
+		frappe.logger().info(f"Raw Envelope: {json.dumps(envelope, indent=2)}")
+		frappe.logger().info(f"\nAttributes: {json.dumps(attributes, indent=2)}")
+		frappe.logger().info(f"Event Data Keys: {list(event_data.keys())}")
+		frappe.logger().info(f"Event Data: {json.dumps(event_data, indent=2)}")
 		
 		# Extract event type - try multiple locations
 		# CloudEvents format uses 'type' in attributes
@@ -173,16 +173,16 @@ def handle_pubsub_push():
 			''
 		)
 		
-		print(f"Extracted event_type: '{event_type}'")
-		print(f"Event type length: {len(event_type)}")
+		frappe.logger().info(f"Extracted event_type: '{event_type}'")
+		frappe.logger().info(f"Event type length: {len(event_type)}")
 		
 		# Get event ID and subscription from attributes or data
 		event_id = attributes.get('ce-id', pubsub_message.get('messageId', ''))
 		subscription_id = envelope.get('subscription', '')
 		
-		print(f"\n{'='*80}")
-		print(f"PROCESSING EVENT: {event_type}")
-		print(f"{'='*80}")
+		frappe.logger().info(f"\n{'='*80}")
+		frappe.logger().info(f"PROCESSING EVENT: {event_type}")
+		frappe.logger().info(f"{'='*80}")
 		frappe.logger().info(f"Received Meet event: {event_type}")
 		
 		# Log the event to VidCon Event Log
@@ -196,28 +196,28 @@ def handle_pubsub_push():
 		
 		# Process the event based on type
 		if event_type == 'google.workspace.meet.conference.v2.started':
-			print(f"→ Calling handle_conference_started()")
+			frappe.logger().info(f"→ Calling handle_conference_started()")
 			handle_conference_started(event_data)
 		elif event_type == 'google.workspace.meet.conference.v2.ended':
-			print(f"→ Calling handle_conference_ended()")
+			frappe.logger().info(f"→ Calling handle_conference_ended()")
 			handle_conference_ended(event_data)
 		elif event_type == 'google.workspace.meet.participant.v2.joined':
-			print(f"→ Calling handle_participant_joined()")
+			frappe.logger().info(f"→ Calling handle_participant_joined()")
 			handle_participant_joined(event_data)
 		elif event_type == 'google.workspace.meet.participant.v2.left':
-			print(f"→ Calling handle_participant_left()")
+			frappe.logger().info(f"→ Calling handle_participant_left()")
 			handle_participant_left(event_data)
 		elif event_type == 'google.workspace.meet.recording.v2.fileGenerated':
-			print(f"→ Calling handle_recording_ready()")
+			frappe.logger().info(f"→ Calling handle_recording_ready()")
 			handle_recording_ready(event_data)
 		elif event_type == 'google.workspace.meet.transcript.v2.fileGenerated':
-			print(f"→ Calling handle_transcript_ready()")
+			frappe.logger().info(f"→ Calling handle_transcript_ready()")
 			handle_transcript_ready(event_data)
 		else:
-			print(f"⚠ Unhandled event type: {event_type}")
+			frappe.logger().info(f"⚠ Unhandled event type: {event_type}")
 			frappe.logger().info(f"Unhandled event type: {event_type}")
 		
-		print(f"{'='*80}\n")
+		frappe.logger().info(f"{'='*80}\n")
 		
 		# Always return 200 to acknowledge receipt
 		return {"status": "ok"}
@@ -235,8 +235,8 @@ def handle_conference_started(event_data):
 	Update VidCon Meeting status to In Progress.
 	"""
 	try:
-		print(f"\n=== HANDLING CONFERENCE STARTED ===")
-		print(f"Event data: {json.dumps(event_data, indent=2)}")
+		frappe.logger().info(f"\n=== HANDLING CONFERENCE STARTED ===")
+		frappe.logger().info(f"Event data: {json.dumps(event_data, indent=2)}")
 		
 		# Extract conference details
 		conference_record = event_data.get('conferenceRecord', {})
@@ -244,8 +244,8 @@ def handle_conference_started(event_data):
 		conference_id = conference_name.split('/')[-1] if conference_name else ''
 		start_time = conference_record.get('startTime')
 		
-		print(f"Conference ID: {conference_id}")
-		print(f"Start time: {start_time}")
+		frappe.logger().info(f"Conference ID: {conference_id}")
+		frappe.logger().info(f"Start time: {start_time}")
 		
 		# Find VidCon Meeting by conference ID or space ID
 		meetings = frappe.get_all(
@@ -257,19 +257,19 @@ def handle_conference_started(event_data):
 			fields=["name", "google_space_id", "google_meet_link"]
 		)
 		
-		print(f"Found {len(meetings)} meetings by conference_id")
+		frappe.logger().info(f"Found {len(meetings)} meetings by conference_id")
 		
 		# If not found by conference ID, try by space ID from subscription
 		if not meetings:
 			# Get space ID from the event (it's in the ce-subject attribute)
 			# We'll need to pass it from the main handler
-			print(f"No meetings found by conference_id, trying all scheduled meetings")
+			frappe.logger().info(f"No meetings found by conference_id, trying all scheduled meetings")
 			meetings = frappe.get_all(
 				"VidCon Meeting",
 				filters={"status": "Scheduled"},
 				fields=["name", "google_space_id", "google_meet_link", "google_conference_id"]
 			)
-			print(f"All scheduled meetings: {json.dumps(meetings, indent=2)}")
+			frappe.logger().info(f"All scheduled meetings: {json.dumps(meetings, indent=2)}")
 		
 		for meeting in meetings:
 			meeting_doc = frappe.get_doc("VidCon Meeting", meeting.name)
@@ -282,17 +282,17 @@ def handle_conference_started(event_data):
 			meeting_doc.actual_start_time = start_time
 			meeting_doc.save(ignore_permissions=True)
 			
-			print(f"✓ Meeting {meeting.name} marked as In Progress")
+			frappe.logger().info(f"✓ Meeting {meeting.name} marked as In Progress")
 			frappe.logger().info(f"Meeting {meeting.name} marked as In Progress")
 		
 		if not meetings:
-			print(f"✗ No meetings found for conference {conference_id}")
+			frappe.logger().info(f"✗ No meetings found for conference {conference_id}")
 		
 		frappe.db.commit()
-		print(f"=== CONFERENCE STARTED HANDLER COMPLETE ===\n")
+		frappe.logger().info(f"=== CONFERENCE STARTED HANDLER COMPLETE ===\n")
 		
 	except Exception as e:
-		print(f"✗ Error handling conference started: {str(e)}")
+		frappe.logger().info(f"✗ Error handling conference started: {str(e)}")
 		frappe.logger().error(f"Error handling conference started: {str(e)}")
 		frappe.log_error(title="Conference Started Handler Error", message=str(e))
 
@@ -358,8 +358,8 @@ def handle_conference_ended(event_data):
 	Update VidCon Meeting status and trigger transcript fetch.
 	"""
 	try:
-		print(f"\n=== HANDLING CONFERENCE ENDED ===")
-		print(f"Event data: {json.dumps(event_data, indent=2)}")
+		frappe.logger().info(f"\n=== HANDLING CONFERENCE ENDED ===")
+		frappe.logger().info(f"Event data: {json.dumps(event_data, indent=2)}")
 		
 		# Extract conference details
 		conference_record = event_data.get('conferenceRecord', {})
@@ -368,8 +368,8 @@ def handle_conference_ended(event_data):
 		space_name = conference_record.get('space', '')
 		end_time = conference_record.get('endTime')
 		
-		print(f"Conference ID: {conference_id}")
-		print(f"End time: {end_time}")
+		frappe.logger().info(f"Conference ID: {conference_id}")
+		frappe.logger().info(f"End time: {end_time}")
 		
 		# Find VidCon Meeting by conference ID
 		meetings = frappe.get_all(
@@ -381,17 +381,17 @@ def handle_conference_ended(event_data):
 			fields=["name", "google_meet_link", "google_conference_id"]
 		)
 		
-		print(f"Found {len(meetings)} meetings by conference_id")
+		frappe.logger().info(f"Found {len(meetings)} meetings by conference_id")
 		
 		# If not found, try all in-progress meetings
 		if not meetings:
-			print(f"No meetings found by conference_id, trying all in-progress meetings")
+			frappe.logger().info(f"No meetings found by conference_id, trying all in-progress meetings")
 			meetings = frappe.get_all(
 				"VidCon Meeting",
 				filters={"status": ["in", ["Scheduled", "In Progress"]]},
 				fields=["name", "google_meet_link", "google_conference_id"]
 			)
-			print(f"All in-progress meetings: {json.dumps(meetings, indent=2)}")
+			frappe.logger().info(f"All in-progress meetings: {json.dumps(meetings, indent=2)}")
 		
 		for meeting in meetings:
 			meeting_doc = frappe.get_doc("VidCon Meeting", meeting.name)
@@ -404,7 +404,7 @@ def handle_conference_ended(event_data):
 			meeting_doc.actual_end_time = end_time
 			meeting_doc.save(ignore_permissions=True)
 			
-			print(f"✓ Meeting {meeting.name} marked as Completed")
+			frappe.logger().info(f"✓ Meeting {meeting.name} marked as Completed")
 			frappe.logger().info(f"Meeting {meeting.name} marked as completed")
 			
 			# Enqueue transcript fetch after delay
@@ -424,10 +424,10 @@ def handle_conference_ended(event_data):
 			frappe.logger().info(f"Transcript fetch enqueued for {meeting.name} after {delay_minutes} minutes")
 		
 		frappe.db.commit()
-		print(f"=== CONFERENCE ENDED HANDLER COMPLETE ===\n")
+		frappe.logger().info(f"=== CONFERENCE ENDED HANDLER COMPLETE ===\n")
 		
 	except Exception as e:
-		print(f"✗ Error handling conference ended: {str(e)}")
+		frappe.logger().info(f"✗ Error handling conference ended: {str(e)}")
 		frappe.logger().error(f"Error handling conference ended: {str(e)}")
 		frappe.log_error(title="Conference Ended Handler Error", message=str(e))
 
@@ -471,13 +471,13 @@ def handle_transcript_ready(event_data):
 	Get transcript details from Meet API and download from Drive.
 	"""
 	try:
-		print(f"\n=== HANDLING TRANSCRIPT READY ===")
-		print(f"Event data: {json.dumps(event_data, indent=2)}")
+		frappe.logger().info(f"\n=== HANDLING TRANSCRIPT READY ===")
+		frappe.logger().info(f"Event data: {json.dumps(event_data, indent=2)}")
 		
 		transcript = event_data.get('transcript', {})
 		transcript_name = transcript.get('name', '')
 		
-		print(f"Transcript name: {transcript_name}")
+		frappe.logger().info(f"Transcript name: {transcript_name}")
 		frappe.logger().info(f"Transcript ready: {transcript_name}")
 		
 		# Extract conference ID from transcript name
@@ -504,21 +504,21 @@ def handle_transcript_ready(event_data):
 				fields=["name"]
 			)
 		
-		print(f"Found {len(meetings)} meetings")
+		frappe.logger().info(f"Found {len(meetings)} meetings for conference {conference_id}")
 		
 		for meeting in meetings:
-			print(f"Downloading transcript for meeting: {meeting.name}")
+			frappe.logger().info(f"Downloading transcript for meeting: {meeting.name}")
 			# Get transcript details from Meet API and download
 			download_transcript_from_meet_api(meeting.name, transcript_name)
 		
 		if not meetings:
-			print(f"✗ No meetings found for conference {conference_id}")
+			frappe.logger().warning(f"✗ No meetings found for conference {conference_id}")
 		
 		frappe.db.commit()
-		print(f"=== TRANSCRIPT READY HANDLER COMPLETE ===\n")
+		frappe.logger().info(f"=== TRANSCRIPT READY HANDLER COMPLETE ===")
 		
 	except Exception as e:
-		print(f"✗ Error handling transcript ready: {str(e)}")
+		frappe.logger().error(f"✗ Error handling transcript ready: {str(e)}")
 		frappe.logger().error(f"Error handling transcript ready: {str(e)}")
 		frappe.log_error(title="Transcript Ready Handler Error", message=str(e))
 
@@ -667,12 +667,12 @@ def download_transcript_from_meet_api(meeting_name, transcript_name):
 		meet_service = build('meet', 'v2', credentials=credentials, static_discovery=False)
 		
 		# Get transcript details from Meet API
-		print(f"Getting transcript details: {transcript_name}")
+		frappe.logger().info(f"Getting transcript details: {transcript_name}")
 		transcript_details = meet_service.conferenceRecords().transcripts().get(
 			name=transcript_name
 		).execute()
 		
-		print(f"Transcript details: {json.dumps(transcript_details, indent=2)}")
+		frappe.logger().info(f"Transcript details: {json.dumps(transcript_details, indent=2)}")
 		
 		# Extract Drive file ID from transcript details
 		drive_destination = transcript_details.get('docsDestination', {})
@@ -682,7 +682,7 @@ def download_transcript_from_meet_api(meeting_name, transcript_name):
 			frappe.logger().error(f"No Drive document ID in transcript details: {transcript_details}")
 			return
 		
-		print(f"Drive document ID: {document_id}")
+		frappe.logger().info(f"Drive document ID: {document_id}")
 		
 		# Download transcript from Drive
 		drive_service = build('drive', 'v3', credentials=credentials, static_discovery=False)
@@ -693,7 +693,7 @@ def download_transcript_from_meet_api(meeting_name, transcript_name):
 			fields='name,description,properties'
 		).execute()
 		
-		print(f"File metadata: {json.dumps(file_metadata, indent=2)}")
+		frappe.logger().info(f"File metadata: {json.dumps(file_metadata, indent=2)}")
 		
 		# Export transcript as plain text
 		request = drive_service.files().export(
@@ -708,8 +708,8 @@ def download_transcript_from_meet_api(meeting_name, transcript_name):
 		else:
 			transcript_text = transcript_content
 		
-		print(f"Transcript length: {len(transcript_text)} characters")
-		print(f"Transcript preview (first 500 chars):\n{transcript_text[:500]}")
+		frappe.logger().info(f"Transcript length: {len(transcript_text)} characters")
+		frappe.logger().info(f"Transcript preview (first 500 chars):\n{transcript_text[:500]}")
 		
 		# Try to extract Gemini notes from transcript
 		# Gemini notes are usually at the beginning of the transcript
@@ -718,7 +718,7 @@ def download_transcript_from_meet_api(meeting_name, transcript_name):
 		# Save transcript as file attachment
 		file_name = f"transcript_{meeting_doc.name}_{frappe.utils.now_datetime().strftime('%Y%m%d_%H%M%S')}.txt"
 		
-		print(f"Creating file attachment: {file_name}")
+		frappe.logger().info(f"Creating file attachment: {file_name}")
 		
 		try:
 			# Create file doc
@@ -734,12 +734,12 @@ def download_transcript_from_meet_api(meeting_name, transcript_name):
 			file_doc.save(ignore_permissions=True)
 			frappe.db.commit()
 			
-			print(f"✓ Transcript saved as attachment: {file_name}")
-			print(f"  File URL: {file_doc.file_url}")
-			print(f"  File size: {len(transcript_text)} bytes")
+			frappe.logger().info(f"✓ Transcript saved as attachment: {file_name}")
+			frappe.logger().info(f"  File URL: {file_doc.file_url}")
+			frappe.logger().info(f"  File size: {len(transcript_text)} bytes")
 			
 		except Exception as file_error:
-			print(f"✗ Error creating file attachment: {str(file_error)}")
+			frappe.logger().error(f"✗ Error creating file attachment: {str(file_error)}")
 			frappe.log_error(title="File Attachment Error", message=f"Meeting: {meeting_doc.name}\nError: {str(file_error)}")
 			# Continue even if file attachment fails - we still have the URL
 		
@@ -750,13 +750,13 @@ def download_transcript_from_meet_api(meeting_name, transcript_name):
 		
 		if gemini_notes:
 			meeting_doc.meeting_notes = gemini_notes
-			print(f"✓ Extracted Gemini notes ({len(gemini_notes)} characters)")
+			frappe.logger().info(f"✓ Extracted Gemini notes ({len(gemini_notes)} characters)")
 		else:
-			print(f"⚠ No Gemini notes found in transcript")
+			frappe.logger().warning(f"⚠ No Gemini notes found in transcript")
 		
 		meeting_doc.save(ignore_permissions=True)
 		
-		print(f"✓ Transcript downloaded and stored for {meeting_name}")
+		frappe.logger().info(f"✓ Transcript downloaded and stored for {meeting_name}")
 		frappe.logger().info(f"Transcript downloaded and stored for {meeting_name}")
 		
 	except Exception as e:
