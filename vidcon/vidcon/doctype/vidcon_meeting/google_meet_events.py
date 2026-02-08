@@ -110,15 +110,23 @@ def log_event(event_type, event_id, subscription_id, event_data, raw_payload):
 		frappe.log_error(title="Event Logging Failed", message=frappe.as_json(error_details, indent=2))
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist(allow_guest=True, methods=['POST'])
 def handle_pubsub_push():
 	"""
-	Webhook endpoint for Google Cloud Pub/Sub push notifications.
-	Receives Google Workspace Events for Meet conferences.
-	
-	Endpoint: /api/method/vidcon.vidcon.doctype.vidcon_meeting.google_meet_events.handle_pubsub_push
+	Handle incoming Pub/Sub push notifications from Google Workspace Events.
+	This is the webhook endpoint that receives Meet event notifications.
 	"""
 	try:
+		# Get the request data
+		envelope = frappe.local.form_dict
+		
+		# Log raw incoming message
+		print(f"\n{'='*80}")
+		print(f"RAW INCOMING PUB/SUB MESSAGE")
+		print(f"{'='*80}")
+		print(json.dumps(envelope, indent=2))
+		print(f"{'='*80}\n")
+		
 		# Get the Pub/Sub message from request
 		envelope = frappe.request.get_json()
 		
@@ -428,17 +436,19 @@ def fetch_transcript_for_conference(conference_id, meeting_name):
 			return
 		
 		google_calendar = frappe.get_doc("Google Calendar", settings.google_calendar)
+		google_settings = frappe.get_single("Google Settings")
 		
 		# Build Meet API service
 		from google.oauth2.credentials import Credentials
 		from googleapiclient.discovery import build
+		from vidcon.vidcon.doctype.vidcon_meeting.subscription_manager import get_vidcon_access_token
 		
 		credentials = Credentials(
-			token=google_calendar.get_password("access_token"),
+			token=get_vidcon_access_token(settings.google_calendar),
 			refresh_token=google_calendar.get_password("refresh_token"),
 			token_uri="https://oauth2.googleapis.com/token",
-			client_id=google_calendar.client_id,
-			client_secret=google_calendar.get_password("client_secret")
+			client_id=google_settings.client_id,
+			client_secret=google_settings.get_password("client_secret")
 		)
 		
 		# Use Meet API to list transcripts for this conference
@@ -533,17 +543,19 @@ def download_and_store_transcript(meeting_name, drive_file_id):
 		# Get Google Calendar credentials
 		settings = frappe.get_single("VidCon Settings")
 		google_calendar = frappe.get_doc("Google Calendar", settings.google_calendar)
+		google_settings = frappe.get_single("Google Settings")
 		
 		# Build Drive service
 		from google.oauth2.credentials import Credentials
 		from googleapiclient.discovery import build
+		from vidcon.vidcon.doctype.vidcon_meeting.subscription_manager import get_vidcon_access_token
 		
 		credentials = Credentials(
-			token=google_calendar.get_password("access_token"),
+			token=get_vidcon_access_token(settings.google_calendar),
 			refresh_token=google_calendar.get_password("refresh_token"),
 			token_uri="https://oauth2.googleapis.com/token",
-			client_id=google_calendar.client_id,
-			client_secret=google_calendar.get_password("client_secret")
+			client_id=google_settings.client_id,
+			client_secret=google_settings.get_password("client_secret")
 		)
 		
 		drive_service = build('drive', 'v3', credentials=credentials, static_discovery=False)
