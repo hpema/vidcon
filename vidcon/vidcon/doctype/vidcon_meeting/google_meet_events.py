@@ -9,6 +9,15 @@ def log_event(event_type, event_id, subscription_id, event_data, raw_payload):
 	Log incoming Pub/Sub event to VidCon Event Log for monitoring.
 	"""
 	try:
+		print("\n" + "="*80)
+		print("LOG_EVENT CALLED")
+		print(f"event_type: {event_type}")
+		print(f"event_type length: {len(event_type) if event_type else 0}")
+		print(f"event_type type: {type(event_type)}")
+		print(f"event_id: {event_id}")
+		print(f"subscription_id: {subscription_id}")
+		print("="*80 + "\n")
+		
 		# Extract space_id and conference_id from event data
 		space_id = None
 		conference_id = None
@@ -19,6 +28,7 @@ def log_event(event_type, event_id, subscription_id, event_data, raw_payload):
 			conference_name = event_data['conferenceRecord'].get('name', '')
 			if conference_name:
 				conference_id = conference_name.split('/')[-1]
+				print(f"Extracted conference_id: {conference_id}")
 				# Try to find meeting by conference_id
 				meetings = frappe.get_all(
 					"VidCon Meeting",
@@ -27,6 +37,7 @@ def log_event(event_type, event_id, subscription_id, event_data, raw_payload):
 				)
 				if meetings:
 					meeting = meetings[0].name
+					print(f"Found meeting: {meeting}")
 		
 		elif 'participantSession' in event_data:
 			session_name = event_data['participantSession'].get('name', '')
@@ -35,6 +46,7 @@ def log_event(event_type, event_id, subscription_id, event_data, raw_payload):
 				parts = session_name.split('/')
 				if len(parts) >= 2:
 					conference_id = parts[1]
+					print(f"Extracted conference_id from session: {conference_id}")
 					# Try to find meeting by conference_id
 					meetings = frappe.get_all(
 						"VidCon Meeting",
@@ -43,6 +55,16 @@ def log_event(event_type, event_id, subscription_id, event_data, raw_payload):
 					)
 					if meetings:
 						meeting = meetings[0].name
+						print(f"Found meeting: {meeting}")
+		
+		print("\nCreating VidCon Event Log document...")
+		print(f"  event_type: '{event_type}' (len={len(event_type) if event_type else 0})")
+		print(f"  event_id: '{event_id}'")
+		print(f"  subscription_id: '{subscription_id}'")
+		print(f"  space_id: '{space_id}'")
+		print(f"  conference_id: '{conference_id}'")
+		print(f"  meeting: '{meeting}'")
+		print(f"  raw_payload length: {len(raw_payload) if raw_payload else 0}")
 		
 		# Create event log
 		log = frappe.get_doc({
@@ -57,11 +79,25 @@ def log_event(event_type, event_id, subscription_id, event_data, raw_payload):
 			"meeting": meeting,
 			"raw_payload": raw_payload
 		})
+		
+		print("Document created, calling insert()...")
 		log.insert(ignore_permissions=True)
+		print(f"Insert successful! Log name: {log.name}")
+		
 		frappe.db.commit()
+		print("Commit successful!")
+		print("="*80 + "\n")
 		
 	except Exception as e:
 		import traceback
+		print("\n" + "!"*80)
+		print("ERROR IN LOG_EVENT!")
+		print(f"Exception type: {type(e).__name__}")
+		print(f"Exception message: {str(e)}")
+		print(f"\nFull traceback:")
+		print(traceback.format_exc())
+		print("!"*80 + "\n")
+		
 		error_details = {
 			"error": str(e),
 			"traceback": traceback.format_exc(),
@@ -105,11 +141,14 @@ def handle_pubsub_push():
 		else:
 			event_data = {}
 		
-		# Get event attributes
+		# Extract event type from the data payload (not attributes)
+		# Google Workspace Events sends eventType in the JSON data
+		event_type = event_data.get('eventType', '')
+		
+		# Get event ID and subscription from attributes or data
 		attributes = pubsub_message.get('attributes', {})
-		event_type = attributes.get('ce-type', '')
-		event_id = attributes.get('ce-id', '')
-		subscription_id = attributes.get('ce-source', '')
+		event_id = attributes.get('ce-id', pubsub_message.get('messageId', ''))
+		subscription_id = envelope.get('subscription', '')
 		
 		frappe.logger().info(f"Received Meet event: {event_type}")
 		
