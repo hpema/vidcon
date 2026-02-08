@@ -718,19 +718,30 @@ def download_transcript_from_meet_api(meeting_name, transcript_name):
 		# Save transcript as file attachment
 		file_name = f"transcript_{meeting_doc.name}_{frappe.utils.now_datetime().strftime('%Y%m%d_%H%M%S')}.txt"
 		
-		# Create file doc
-		file_doc = frappe.get_doc({
-			"doctype": "File",
-			"file_name": file_name,
-			"attached_to_doctype": "VidCon Meeting",
-			"attached_to_name": meeting_doc.name,
-			"attached_to_field": "transcript_file",
-			"content": transcript_text,
-			"is_private": 1
-		})
-		file_doc.save(ignore_permissions=True)
+		print(f"Creating file attachment: {file_name}")
 		
-		print(f"✓ Transcript saved as attachment: {file_name}")
+		try:
+			# Create file doc
+			file_doc = frappe.get_doc({
+				"doctype": "File",
+				"file_name": file_name,
+				"attached_to_doctype": "VidCon Meeting",
+				"attached_to_name": meeting_doc.name,
+				"attached_to_field": "transcript_file",
+				"content": transcript_text,
+				"is_private": 1
+			})
+			file_doc.save(ignore_permissions=True)
+			frappe.db.commit()
+			
+			print(f"✓ Transcript saved as attachment: {file_name}")
+			print(f"  File URL: {file_doc.file_url}")
+			print(f"  File size: {len(transcript_text)} bytes")
+			
+		except Exception as file_error:
+			print(f"✗ Error creating file attachment: {str(file_error)}")
+			frappe.log_error(title="File Attachment Error", message=f"Meeting: {meeting_doc.name}\nError: {str(file_error)}")
+			# Continue even if file attachment fails - we still have the URL
 		
 		# Update meeting with transcript metadata and notes
 		meeting_doc.transcript_file_id = document_id
@@ -738,8 +749,10 @@ def download_transcript_from_meet_api(meeting_name, transcript_name):
 		meeting_doc.transcript_retrieved_at = frappe.utils.now_datetime()
 		
 		if gemini_notes:
-			meeting_doc.notes = gemini_notes
+			meeting_doc.meeting_notes = gemini_notes
 			print(f"✓ Extracted Gemini notes ({len(gemini_notes)} characters)")
+		else:
+			print(f"⚠ No Gemini notes found in transcript")
 		
 		meeting_doc.save(ignore_permissions=True)
 		
