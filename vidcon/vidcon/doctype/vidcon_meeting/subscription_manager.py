@@ -56,57 +56,34 @@ def get_cloud_identity_user_id(google_calendar_name, user_email):
 	Get Cloud Identity user ID for an email address.
 	Required for creating user-based Meet subscriptions.
 	
+	According to Google's documentation, for Workspace accounts, the user ID
+	can be the email address itself when using cloudidentity.googleapis.com format.
+	
 	Args:
 		google_calendar_name: Name of the Google Calendar document
 		user_email: Email address of the user
 	
 	Returns:
-		str: Cloud Identity user ID
+		str: User identifier (email for Workspace accounts)
 	"""
-	try:
-		google_calendar = frappe.get_doc("Google Calendar", google_calendar_name)
-		google_settings = frappe.get_single("Google Settings")
-		
-		credentials = Credentials(
-			token=get_vidcon_access_token(google_calendar_name),
-			refresh_token=google_calendar.get_password("refresh_token"),
-			token_uri="https://oauth2.googleapis.com/token",
-			client_id=google_settings.client_id,
-			client_secret=google_settings.get_password("client_secret")
-		)
-		
-		# Use Cloud Identity API to lookup user
-		from googleapiclient.discovery import build
-		identity_service = build('cloudidentity', 'v1', credentials=credentials, static_discovery=False)
-		
-		# Search for user by email
-		response = identity_service.users().lookup().execute(
-			query=f"email:{user_email}"
-		)
-		
-		if response and 'name' in response:
-			# Extract user ID from resource name (format: users/USER_ID)
-			user_id = response['name'].split('/')[-1]
-			return user_id
-		else:
-			frappe.throw(_("Could not find Cloud Identity user for email: {0}").format(user_email))
-			
-	except Exception as e:
-		frappe.log_error(title="Cloud Identity User Lookup Failed", message=str(e))
-		frappe.throw(_("Failed to get user ID: {0}").format(str(e)))
+	# For Google Workspace accounts, the email address IS the valid user identifier
+	# when using the //cloudidentity.googleapis.com/users/{user} format
+	# Reference: https://developers.google.com/workspace/events/guides/events-meet
+	return user_email
 
 
-def create_meet_subscription(google_calendar_name, user_email, pubsub_topic):
+def create_meet_subscription(google_calendar_name, space_resource=None, user_email=None, pubsub_topic=None):
 	"""
-	Create a Google Workspace Events subscription for a user's Meet conferences.
+	Create a Google Workspace Events subscription for Meet events.
 	
-	NOTE: Space-based subscriptions don't work because we can't get the conference
-	record resource name until the meeting starts. User-based subscriptions monitor
-	all meetings where the user is the organizer.
+	Can create either space-based or user-based subscriptions:
+	- Space-based: Monitor a specific meeting space (preferred)
+	- User-based: Monitor all meetings for a user (fallback)
 	
 	Args:
 		google_calendar_name: Name of the Google Calendar document
-		user_email: Email of the user to monitor (meeting organizer)
+		space_resource: Space resource name (e.g., 'spaces/abc-defg-hij') for space-based subscription
+		user_email: Email of the user to monitor for user-based subscription
 		pubsub_topic: Full Pub/Sub topic name (projects/PROJECT_ID/topics/TOPIC)
 	
 	Returns:
@@ -129,14 +106,21 @@ def create_meet_subscription(google_calendar_name, user_email, pubsub_topic):
 		# Build Workspace Events API service
 		events_service = build('workspaceevents', 'v1', credentials=credentials, static_discovery=False)
 		
-		# Get Cloud Identity user ID for the email
-		user_id = get_cloud_identity_user_id(google_calendar_name, user_email)
+		# Determine target resource
+		if space_resource:
+			# Space-based subscription for a specific meeting
+			# Format: //meet.googleapis.com/spaces/{meetingCode}
+			target_resource = f"//meet.googleapis.com/{space_resource}"
+		elif user_email:
+			# User-based subscription for all meetings where user is organizer
+			# Format: //cloudidentity.googleapis.com/users/{email}
+			target_resource = f"//cloudidentity.googleapis.com/users/{user_email}"
+		else:
+			frappe.throw(_("Either space_resource or user_email must be provided"))
 		
 		# Create subscription body
-		# For user-based subscriptions monitoring all meetings where user is organizer
-		# Format: //cloudidentity.googleapis.com/users/{user_id}
 		subscription_body = {
-			"targetResource": f"//cloudidentity.googleapis.com/users/{user_id}",
+			"targetResource": target_resource,
 			"eventTypes": [
 				"google.workspace.meet.conference.v2.started",
 				"google.workspace.meet.conference.v2.ended",

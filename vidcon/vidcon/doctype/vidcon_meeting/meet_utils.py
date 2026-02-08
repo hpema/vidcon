@@ -52,22 +52,25 @@ def create_space_subscription(meeting_doc):
 	if not settings.enable_meet_events:
 		return None
 	
-	# Extract space ID from Meet link
-	space_id = extract_space_id_from_meet_link(meeting_doc.google_meet_link)
-	if not space_id:
+	# Extract meeting code from Meet link
+	meeting_code = extract_space_id_from_meet_link(meeting_doc.google_meet_link)
+	if not meeting_code:
 		frappe.log_error(
 			title="Invalid Meet Link",
-			message=f"Could not extract space ID from: {meeting_doc.google_meet_link}"
+			message=f"Could not extract meeting code from: {meeting_doc.google_meet_link}"
 		)
 		return None
 	
 	try:
 		from vidcon.vidcon.doctype.vidcon_meeting.subscription_manager import create_meet_subscription
 		
-		# Create subscription
+		# Create subscription using spaces/{meetingCode} format
+		# According to Google's docs, meetingCode can be used as an alias for space ID
+		space_resource = f"spaces/{meeting_code}"
+		
 		response = create_meet_subscription(
 			google_calendar_name=settings.google_calendar,
-			space_id=space_id,
+			space_resource=space_resource,
 			pubsub_topic=settings.pubsub_topic_name
 		)
 		
