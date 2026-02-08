@@ -104,8 +104,15 @@ def vidcon_callback(code=None):
 		
 		# Store tokens in Google Calendar document
 		google_calendar = frappe.get_doc("Google Calendar", google_calendar_name)
-		google_calendar.set_value("authorization_code", code)
-		google_calendar.set_value("refresh_token", tokens.get("refresh_token"))
+		
+		# Store authorization code (regular field)
+		google_calendar.authorization_code = code
+		google_calendar.save(ignore_permissions=True)
+		
+		# Store refresh_token (password field - stored in __Auth table)
+		if tokens.get("refresh_token"):
+			google_calendar.set_password("refresh_token", tokens.get("refresh_token"))
+		
 		frappe.db.commit()
 		
 		# Clear cache
