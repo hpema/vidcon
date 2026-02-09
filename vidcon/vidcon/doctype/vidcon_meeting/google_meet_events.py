@@ -2,6 +2,59 @@ import frappe
 from frappe import _
 import json
 import base64
+import jwt
+from jwt import PyJWKClient
+import requests
+from datetime import datetime
+
+
+def verify_pubsub_jwt(token, audience):
+	"""
+	Verify JWT token from Google Pub/Sub push endpoint.
+	
+	Args:
+		token: JWT token from Authorization header
+		audience: Expected audience (your webhook URL)
+	
+	Returns:
+		dict: Decoded token payload if valid, None otherwise
+	"""
+	try:
+		# Google's public keys URL
+		jwks_url = "https://www.googleapis.com/oauth2/v3/certs"
+		
+		# Create JWK client to fetch Google's public keys
+		jwks_client = PyJWKClient(jwks_url)
+		
+		# Get the signing key from the token
+		signing_key = jwks_client.get_signing_key_from_jwt(token)
+		
+		# Verify and decode the token
+		decoded = jwt.decode(
+			token,
+			signing_key.key,
+			algorithms=["RS256"],
+			audience=audience,
+			options={"verify_exp": True}
+		)
+		
+		# Verify issuer is Google
+		if decoded.get('iss') not in ['accounts.google.com', 'https://accounts.google.com']:
+			frappe.log_error(title="Invalid JWT Issuer", message=f"Issuer: {decoded.get('iss')}")
+			return None
+		
+		frappe.log_error(title="Pub/Sub JWT Verified", message=f"Token verified for email: {decoded.get('email')}")
+		return decoded
+		
+	except jwt.ExpiredSignatureError:
+		frappe.log_error(title="JWT Expired", message="Pub/Sub JWT token has expired")
+		return None
+	except jwt.InvalidAudienceError:
+		frappe.log_error(title="Invalid JWT Audience", message=f"Expected: {audience}")
+		return None
+	except Exception as e:
+		frappe.log_error(title="JWT Verification Failed", message=str(e))
+		return None
 
 
 def log_event(event_type, event_id, subscription_id, event_data, raw_payload):
@@ -117,26 +170,52 @@ def handle_pubsub_push():
 	This is the webhook endpoint that receives Meet event notifications.
 	
 	Note: allow_guest=True is required for Pub/Sub push endpoint.
-	Security is handled by validating the Pub/Sub token in the request.
+	Security is handled by validating the JWT token from Google.
 	"""
-	# TODO: Add Pub/Sub token validation for production
-	# Validate the token from Pub/Sub subscription to ensure authenticity
 	try:
 		# Get the request data
 		envelope = frappe.local.form_dict
 		
-		# Log raw incoming message
-		frappe.logger().info(f"\n{'='*80}")
-		frappe.logger().info(f"RAW INCOMING PUB/SUB MESSAGE")
-		frappe.logger().info(f"{'='*80}")
-		frappe.logger().info(json.dumps(envelope, indent=2))
-		frappe.logger().info(f"{'='*80}\n")
+		# Log raw incoming message using frappe.log_error for visibility
+		frappe.log_error(
+			title="Pub/Sub Message Received",
+			message=f"Raw envelope:\n{json.dumps(envelope, indent=2)}"
+		)
+		
+		# Verify JWT token from Authorization header
+		auth_header = frappe.request.headers.get('Authorization', '')
+		if not auth_header.startswith('Bearer '):
+			frappe.log_error(
+				title="Missing JWT Token",
+				message="No Bearer token in Authorization header"
+			)
+			return {"status": "error", "message": "Unauthorized"}, 401
+		
+		token = auth_header.replace('Bearer ', '')
+		
+		# Get the webhook URL for audience verification
+		site_url = frappe.utils.get_url()
+		audience = f"{site_url}/api/method/vidcon.vidcon.doctype.vidcon_meeting.google_meet_events.handle_pubsub_push"
+		
+		# Verify the JWT token
+		decoded_token = verify_pubsub_jwt(token, audience)
+		if not decoded_token:
+			frappe.log_error(
+				title="JWT Verification Failed",
+				message="Invalid or expired JWT token from Pub/Sub"
+			)
+			return {"status": "error", "message": "Unauthorized"}, 401
+		
+		frappe.log_error(
+			title="JWT Verified Successfully",
+			message=f"Verified token for: {decoded_token.get('email')}"
+		)
 		
 		# Get the Pub/Sub message from request
 		envelope = frappe.request.get_json()
 		
 		if not envelope:
-			frappe.logger().error("No Pub/Sub message received")
+			frappe.log_error(title="Empty Pub/Sub Message", message="No message in request body")
 			return {"status": "error", "message": "No message"}
 		
 		# Extract the Pub/Sub message
