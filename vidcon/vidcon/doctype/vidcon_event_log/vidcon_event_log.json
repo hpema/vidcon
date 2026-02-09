@@ -83,7 +83,8 @@
    "fieldname": "meeting",
    "fieldtype": "Link",
    "label": "VidCon Meeting",
-   "options": "VidCon Meeting"
+   "options": "VidCon Meeting",
+   "ondelete": "Set Null"
   },
   {
    "collapsible": 1,

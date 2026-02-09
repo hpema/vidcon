@@ -18,7 +18,22 @@ class VidConMeeting(Document):
 			self.update_google_meet_event()
 	
 	def on_trash(self):
-		"""Clean up Google Calendar Event and Meet subscription when meeting is deleted"""
+		"""Clean up Google Calendar Event, Event Logs, and Meet subscription when meeting is deleted"""
+		# Clear links from VidCon Event Logs first
+		try:
+			event_logs = frappe.get_all(
+				"VidCon Event Log",
+				filters={"meeting": self.name},
+				fields=["name"]
+			)
+			for log in event_logs:
+				frappe.db.set_value("VidCon Event Log", log.name, "meeting", None)
+			if event_logs:
+				frappe.db.commit()
+				frappe.log_error(title="Event Logs Unlinked", message=f"Cleared {len(event_logs)} event log links for meeting {self.name}")
+		except Exception as e:
+			frappe.log_error(title="Error Unlinking Event Logs", message=str(e))
+		
 		# Delete Google Calendar Event
 		if self.event:
 			try:
