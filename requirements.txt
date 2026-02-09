@@ -1,0 +1,12 @@
+# VidCon - Video Conferencing Note Taker
+# Python dependencies
+
+# JWT verification for Google Pub/Sub security
+PyJWT[crypto]>=2.8.0
+cryptography>=41.0.0
+
+# Google API clients (already installed via frappe)
+# google-api-python-client
+# google-auth
+# google-auth-oauthlib
+# google-auth-httplib2
