@@ -23,19 +23,27 @@ class VidConMeeting(Document):
 		if self.event:
 			try:
 				event_doc = frappe.get_doc("Event", self.event)
+				
+				# Check if Event has a link back to VidCon Meeting and clear it
+				if hasattr(event_doc, 'vidcon_meeting'):
+					event_doc.vidcon_meeting = None
+					event_doc.save(ignore_permissions=True)
+				
+				# Now delete the Event
 				event_doc.delete(ignore_permissions=True)
-				frappe.logger().info(f"Deleted Event {self.event} for meeting {self.name}")
+				frappe.db.commit()
+				frappe.log_error(title="Event Deleted", message=f"Deleted Event {self.event} for meeting {self.name}")
 			except Exception as e:
-				frappe.log_error(f"Error deleting Event {self.event}: {str(e)}")
+				frappe.log_error(title="Error Deleting Event", message=f"Event {self.event}: {str(e)}")
 		
 		# Delete Meet Events subscription
 		if self.meet_subscription_id:
 			try:
 				from vidcon.vidcon.doctype.vidcon_meeting.meet_utils import delete_space_subscription
 				delete_space_subscription(self.meet_subscription_id)
-				frappe.logger().info(f"Deleted subscription {self.meet_subscription_id} for meeting {self.name}")
+				frappe.log_error(title="Subscription Deleted", message=f"Deleted subscription {self.meet_subscription_id} for meeting {self.name}")
 			except Exception as e:
-				frappe.log_error(f"Error deleting subscription {self.meet_subscription_id}: {str(e)}")
+				frappe.log_error(title="Error Deleting Subscription", message=f"Subscription {self.meet_subscription_id}: {str(e)}")
 	
 	def calculate_duration(self):
 		"""Calculate meeting duration in minutes"""

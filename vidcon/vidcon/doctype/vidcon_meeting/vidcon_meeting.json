@@ -121,7 +121,8 @@
    "fieldtype": "Link",
    "label": "Event",
    "options": "Event",
-   "read_only": 1
+   "read_only": 1,
+   "ondelete": "Set Null"
   },
   {
    "fieldname": "google_meet_link",
