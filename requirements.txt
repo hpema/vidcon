@@ -1,9 +1,11 @@
 # VidCon - Video Conferencing Note Taker
 # Python dependencies
 
-# JWT verification for Google Pub/Sub security
-PyJWT[crypto]>=2.8.0
-cryptography>=41.0.0
+# Note: PyJWT and cryptography are provided by Frappe
+# Frappe 15.99.0 includes:
+#   - PyJWT~=2.8.0 (with crypto support)
+#   - cryptography~=44.0.1
+# These are sufficient for Google Pub/Sub JWT verification
 
 # Google API clients (already installed via frappe)
 # google-api-python-client

@@ -9,8 +9,8 @@ readme = "README.md"
 dynamic = ["version"]
 dependencies = [
     # "frappe~=15.0.0" # Installed and managed by bench.
-    "PyJWT[crypto]>=2.8.0",
-    "cryptography>=41.0.0",
+    # PyJWT and cryptography versions must match Frappe's requirements
+    # Frappe 15.99.0 requires PyJWT~=2.8.0 and cryptography~=44.0.1
 ]
 
 [build-system]
