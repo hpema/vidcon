@@ -809,6 +809,20 @@ def extract_gemini_notes(transcript_text):
 			# Clean up - remove the "📝 Notes" header if present
 			if notes_section.startswith('📝 Notes'):
 				notes_section = notes_section[len('📝 Notes'):].strip()
+			elif notes_section.startswith('\ufeff📝 Notes'):  # Handle BOM character
+				notes_section = notes_section[len('\ufeff📝 Notes'):].strip()
+			
+			# Remove review prompts and survey links at the end
+			cleanup_markers = [
+				'You should review Gemini',
+				'Please provide feedback',
+				'Get tips and learn how Gemini'
+			]
+			
+			for marker in cleanup_markers:
+				if marker in notes_section:
+					notes_section = notes_section[:notes_section.index(marker)].strip()
+					break
 			
 			# Verify this looks like Gemini notes
 			if any(keyword in notes_section.lower() for keyword in ['summary', 'details', 'meeting']):
