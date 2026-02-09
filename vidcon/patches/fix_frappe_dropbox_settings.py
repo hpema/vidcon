@@ -1,14 +1,17 @@
 """
 Patch Frappe's Dropbox Settings to handle missing pkg_resources gracefully.
 
-This fixes compatibility with Python 3.12+ and modern packaging tools where
+This fixes compatibility with Python 3.12+ and setuptools v82.0.0+ where
 pkg_resources is not automatically available. The dropbox SDK (v11.36.2)
 still depends on pkg_resources which causes import errors during migration.
+
+Related: https://github.com/frappe/bench/issues/1698
 
 This patch is applied automatically when VidCon is installed/updated.
 """
 import frappe
 import os
+import sys
 
 
 def execute():
