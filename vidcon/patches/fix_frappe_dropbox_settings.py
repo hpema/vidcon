@@ -8,6 +8,8 @@ still depends on pkg_resources which causes import errors during migration.
 Related: https://github.com/frappe/bench/issues/1698
 
 This patch is applied automatically when VidCon is installed/updated.
+
+Still need to apply this patch again
 """
 import frappe
 import os
