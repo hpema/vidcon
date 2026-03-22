@@ -814,6 +814,12 @@ def handle_transcript_ready(event_data, attributes):
 		if 'meet-spaces-' in ce_source:
 			subscription_uuid = ce_source.split('meet-spaces-')[-1]
 		
+		# Encode subscription UUID for database lookup
+		subscription_uuid_encoded = ''
+		if subscription_uuid:
+			import base64
+			subscription_uuid_encoded = base64.b64encode(subscription_uuid.encode()).decode()[:20]
+		
 		# Extract space ID from ce-subject attribute
 		ce_subject = attributes.get('ce-subject', '')
 		space_id = ce_subject.split('/')[-1] if ce_subject else ''
@@ -821,6 +827,7 @@ def handle_transcript_ready(event_data, attributes):
 		frappe.logger().info(f"Transcript name: {transcript_name}")
 		frappe.logger().info(f"Space ID from ce-subject: {space_id}")
 		frappe.logger().info(f"Subscription UUID: {subscription_uuid}")
+		frappe.logger().info(f"Subscription UUID encoded: {subscription_uuid_encoded}")
 		frappe.logger().info(f"Transcript ready: {transcript_name}")
 		
 		# Extract conference ID from transcript name
