@@ -264,23 +264,82 @@ class VidConMeeting(Document):
 @frappe.whitelist()
 def create_meet_subscription(meeting_name):
 	"""Create a Meet Events subscription for this meeting"""
-	from vidcon.vidcon.doctype.vidcon_meeting.meet_utils import create_space_subscription
+	from vidcon.vidcon.doctype.vidcon_meeting.subscription_manager import create_meet_subscription as create_subscription
 	
 	meeting = frappe.get_doc("VidCon Meeting", meeting_name)
 	meeting.check_permission("write")
 	
-	response = create_space_subscription(meeting)
+	# Validate we have the space_id
+	if not meeting.google_space_id:
+		frappe.throw(_("Meeting does not have a Google Meet space ID. Please ensure the meeting was created properly."))
 	
-	if response:
-		# Store subscription ID on meeting
-		meeting.db_set("meet_subscription_id", response.get("name"), update_modified=False)
+	# Get settings
+	settings = frappe.get_single("VidCon Settings")
+	
+	if not settings.enable_meet_events:
+		frappe.throw(_("Meet Events are not enabled in VidCon Settings"))
+	
+	if not settings.pubsub_topic_name:
+		frappe.throw(_("Pub/Sub topic not configured in VidCon Settings"))
+	
+	try:
+		# Create subscription using the space resource name we already have
+		space_resource = f"spaces/{meeting.google_space_id}"
 		
-		return {
-			"subscription_id": response.get("name"),
-			"state": response.get("state")
-		}
-	else:
-		frappe.throw(_("Failed to create subscription. Check Error Log for details."))
+		response = create_subscription(
+			google_calendar_name=settings.google_calendar,
+			space_resource=space_resource,
+			pubsub_topic=settings.pubsub_topic_name
+		)
+		
+		if response:
+			# Store subscription ID on meeting
+			meeting.db_set("meet_subscription_id", response.get("name"), update_modified=False)
+			
+			frappe.msgprint(_("Subscription created successfully!"), indicator="green")
+			
+			return {
+				"subscription_id": response.get("name"),
+				"state": response.get("state")
+			}
+		else:
+			frappe.throw(_("Failed to create subscription. Check Error Log for details."))
+			
+	except Exception as e:
+		error_str = str(e)
+		
+		# Check if subscription already exists
+		if "SUBSCRIPTION_ALREADY_EXISTS" in error_str or "409" in error_str:
+			# Extract existing subscription ID from error message
+			import re
+			match = re.search(r"current_subscription['\"]:\s*['\"]([^'\"]+)", error_str)
+			
+			if match:
+				existing_subscription_id = match.group(1)
+				
+				# Store the existing subscription ID
+				meeting.db_set("meet_subscription_id", existing_subscription_id, update_modified=False)
+				
+				frappe.msgprint(
+					_("Subscription already exists for this meeting space. Using existing subscription: {0}").format(existing_subscription_id),
+					indicator="blue"
+				)
+				
+				return {
+					"subscription_id": existing_subscription_id,
+					"state": "ACTIVE"
+				}
+			else:
+				frappe.msgprint(
+					_("Subscription already exists for this meeting space, but could not extract subscription ID. Check Error Log."),
+					indicator="orange"
+				)
+		
+		frappe.log_error(
+			title=f"Meet Subscription Creation Failed - {meeting_name}",
+			message=f"Space ID: {meeting.google_space_id}\nError: {str(e)}"
+		)
+		frappe.throw(_("Failed to create subscription: {0}").format(str(e)))
 
 
 @frappe.whitelist()

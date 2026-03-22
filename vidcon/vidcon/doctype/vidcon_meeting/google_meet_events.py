@@ -173,42 +173,72 @@ def handle_pubsub_push():
 	Security is handled by validating the JWT token from Google.
 	"""
 	try:
-		# Get the request data
-		envelope = frappe.local.form_dict
+		# === COMPREHENSIVE LOGGING START ===
+		import datetime
+		timestamp = datetime.datetime.now().isoformat()
 		
-		# Log raw incoming message using frappe.log_error for visibility
+		# Log that webhook was called
 		frappe.log_error(
-			title="Pub/Sub Message Received",
-			message=f"Raw envelope:\n{json.dumps(envelope, indent=2)}"
+			title=f"🔔 Pub/Sub Webhook Called - {timestamp}",
+			message=f"Webhook endpoint hit at {timestamp}\nMethod: {frappe.request.method}\nPath: {frappe.request.path}"
 		)
+		
+		# Log all request headers
+		headers_dict = dict(frappe.request.headers)
+		frappe.log_error(
+			title=f"📋 Request Headers - {timestamp}",
+			message=json.dumps(headers_dict, indent=2)
+		)
+		
+		# Get raw request body
+		try:
+			raw_body = frappe.request.get_data(as_text=True)
+			frappe.log_error(
+				title=f"📦 Raw Request Body - {timestamp}",
+				message=f"Body length: {len(raw_body)} bytes\n\n{raw_body[:2000]}"  # First 2000 chars
+			)
+		except Exception as body_error:
+			frappe.log_error(
+				title=f"⚠️ Could not read request body - {timestamp}",
+				message=str(body_error)
+			)
 		
 		# Verify JWT token from Authorization header
 		auth_header = frappe.request.headers.get('Authorization', '')
 		if not auth_header.startswith('Bearer '):
 			frappe.log_error(
-				title="Missing JWT Token",
-				message="No Bearer token in Authorization header"
+				title=f"❌ Missing JWT Token - {timestamp}",
+				message=f"Authorization header: {auth_header[:50] if auth_header else 'EMPTY'}"
 			)
 			return {"status": "error", "message": "Unauthorized"}, 401
 		
 		token = auth_header.replace('Bearer ', '')
+		frappe.log_error(
+			title=f"🔑 JWT Token Received - {timestamp}",
+			message=f"Token length: {len(token)} characters\nFirst 50 chars: {token[:50]}..."
+		)
 		
 		# Get the webhook URL for audience verification
 		site_url = frappe.utils.get_url()
 		audience = f"{site_url}/api/method/vidcon.vidcon.doctype.vidcon_meeting.google_meet_events.handle_pubsub_push"
 		
+		frappe.log_error(
+			title=f"🎯 Verifying JWT Audience - {timestamp}",
+			message=f"Expected audience: {audience}"
+		)
+		
 		# Verify the JWT token
 		decoded_token = verify_pubsub_jwt(token, audience)
 		if not decoded_token:
 			frappe.log_error(
-				title="JWT Verification Failed",
+				title=f"❌ JWT Verification Failed - {timestamp}",
 				message="Invalid or expired JWT token from Pub/Sub"
 			)
 			return {"status": "error", "message": "Unauthorized"}, 401
 		
 		frappe.log_error(
-			title="JWT Verified Successfully",
-			message=f"Verified token for: {decoded_token.get('email')}"
+			title=f"✅ JWT Verified Successfully - {timestamp}",
+			message=f"Verified token for: {decoded_token.get('email')}\nIssuer: {decoded_token.get('iss')}"
 		)
 		
 		# Get the Pub/Sub message from request
@@ -230,18 +260,23 @@ def handle_pubsub_push():
 		if data:
 			decoded_data = base64.b64decode(data).decode('utf-8')
 			event_data = json.loads(decoded_data)
+			frappe.log_error(
+				title=f"📨 Decoded Event Data - {timestamp}",
+				message=f"Decoded data:\n{json.dumps(event_data, indent=2)}"
+			)
 		else:
 			event_data = {}
+			frappe.log_error(
+				title=f"⚠️ Empty Event Data - {timestamp}",
+				message="No data field in Pub/Sub message"
+			)
 		
 		# Get attributes
 		attributes = pubsub_message.get('attributes', {})
-		
-		# Debug logging
-		frappe.logger().info(f"\n=== Pub/Sub Message Received ===")
-		frappe.logger().info(f"Raw Envelope: {json.dumps(envelope, indent=2)}")
-		frappe.logger().info(f"\nAttributes: {json.dumps(attributes, indent=2)}")
-		frappe.logger().info(f"Event Data Keys: {list(event_data.keys())}")
-		frappe.logger().info(f"Event Data: {json.dumps(event_data, indent=2)}")
+		frappe.log_error(
+			title=f"🏷️ Event Attributes - {timestamp}",
+			message=json.dumps(attributes, indent=2)
+		)
 		
 		# Extract event type - try multiple locations
 		# CloudEvents format uses 'type' in attributes
@@ -252,12 +287,19 @@ def handle_pubsub_push():
 			''
 		)
 		
-		frappe.logger().info(f"Extracted event_type: '{event_type}'")
-		frappe.logger().info(f"Event type length: {len(event_type)}")
+		frappe.log_error(
+			title=f"🎯 Event Type Extracted - {timestamp}",
+			message=f"Event Type: '{event_type}'\nLength: {len(event_type)}\nSource: {attributes.get('ce-source', 'N/A')}"
+		)
 		
 		# Get event ID and subscription from attributes or data
 		event_id = attributes.get('ce-id', pubsub_message.get('messageId', ''))
 		subscription_id = envelope.get('subscription', '')
+		
+		frappe.log_error(
+			title=f"🆔 Event Identifiers - {timestamp}",
+			message=f"Event ID: {event_id}\nSubscription: {subscription_id}\nMessage ID: {pubsub_message.get('messageId', 'N/A')}"
+		)
 		
 		frappe.logger().info(f"\n{'='*80}")
 		frappe.logger().info(f"PROCESSING EVENT: {event_type}")
@@ -275,28 +317,52 @@ def handle_pubsub_push():
 		
 		# Process the event based on type
 		if event_type == 'google.workspace.meet.conference.v2.started':
-			frappe.logger().info(f"→ Calling handle_conference_started()")
+			frappe.log_error(
+				title=f"🚀 Processing: conference.started - {timestamp}",
+				message="Calling handle_conference_started()"
+			)
 			handle_conference_started(event_data)
 		elif event_type == 'google.workspace.meet.conference.v2.ended':
-			frappe.logger().info(f"→ Calling handle_conference_ended()")
+			frappe.log_error(
+				title=f"🏁 Processing: conference.ended - {timestamp}",
+				message="Calling handle_conference_ended()"
+			)
 			handle_conference_ended(event_data)
 		elif event_type == 'google.workspace.meet.participant.v2.joined':
-			frappe.logger().info(f"→ Calling handle_participant_joined()")
+			frappe.log_error(
+				title=f"👤 Processing: participant.joined - {timestamp}",
+				message="Calling handle_participant_joined()"
+			)
 			handle_participant_joined(event_data)
 		elif event_type == 'google.workspace.meet.participant.v2.left':
-			frappe.logger().info(f"→ Calling handle_participant_left()")
+			frappe.log_error(
+				title=f"👋 Processing: participant.left - {timestamp}",
+				message="Calling handle_participant_left()"
+			)
 			handle_participant_left(event_data)
 		elif event_type == 'google.workspace.meet.recording.v2.fileGenerated':
-			frappe.logger().info(f"→ Calling handle_recording_ready()")
+			frappe.log_error(
+				title=f"🎥 Processing: recording.fileGenerated - {timestamp}",
+				message="Calling handle_recording_ready()"
+			)
 			handle_recording_ready(event_data)
 		elif event_type == 'google.workspace.meet.transcript.v2.fileGenerated':
-			frappe.logger().info(f"→ Calling handle_transcript_ready()")
+			frappe.log_error(
+				title=f"📝 Processing: transcript.fileGenerated - {timestamp}",
+				message="Calling handle_transcript_ready()"
+			)
 			handle_transcript_ready(event_data)
 		else:
-			frappe.logger().info(f"⚠ Unhandled event type: {event_type}")
-			frappe.logger().info(f"Unhandled event type: {event_type}")
+			frappe.log_error(
+				title=f"⚠️ Unhandled Event Type - {timestamp}",
+				message=f"Event type: '{event_type}'\nFull event data:\n{json.dumps(event_data, indent=2)}"
+			)
 		
-		frappe.logger().info(f"{'='*80}\n")
+		# Log successful completion
+		frappe.log_error(
+			title=f"✅ Webhook Processing Complete - {timestamp}",
+			message=f"Event type '{event_type}' processed successfully\nReturning status: ok"
+		)
 		
 		# Always return 200 to acknowledge receipt
 		return {"status": "ok"}
