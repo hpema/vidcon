@@ -412,8 +412,14 @@ def handle_conference_started(event_data, attributes):
 		# Extract subscription UUID from ce-source
 		ce_source = attributes.get('ce-source', '')
 		subscription_uuid = ''
+		subscription_uuid_encoded = ''
 		if 'meet-spaces-' in ce_source:
 			subscription_uuid = ce_source.split('meet-spaces-')[-1]
+			# Encode UUID to base64 for matching against meet_subscription_id
+			# The meet_subscription_id contains base64 encoded data with the UUID
+			import base64
+			uuid_with_prefix = f'${subscription_uuid}'.encode('utf-8')
+			subscription_uuid_encoded = base64.b64encode(uuid_with_prefix).decode('utf-8')[:20]
 		
 		# Extract space ID from ce-subject attribute (format: //meet.googleapis.com/spaces/SPACE_ID)
 		ce_subject = attributes.get('ce-subject', '')
@@ -481,8 +487,23 @@ def handle_conference_started(event_data, attributes):
 			meeting_doc.actual_start_time = start_time
 			meeting_doc.save(ignore_permissions=True)
 			
+			# Send real-time notification
+			frappe.publish_realtime(
+				event='vidcon_meeting_started',
+				message={
+					'meeting_name': meeting.name,
+					'status': 'In Progress',
+					'conference_id': conference_id
+				},
+				doctype='VidCon Meeting',
+				docname=meeting.name
+			)
+			
 			frappe.logger().info(f"✓ Meeting {meeting.name} marked as In Progress")
-			frappe.logger().info(f"Meeting {meeting.name} marked as In Progress")
+			frappe.log_error(
+				title=f"✅ Meeting {meeting.name} started",
+				message=f"Meeting: {meeting.name}\nStatus: In Progress\nConference ID: {conference_id}\nStart time: {start_time}"
+			)
 		
 		if not meetings:
 			frappe.logger().info(f"✗ No meetings found for conference {conference_id} or space {space_id}")
@@ -680,6 +701,19 @@ def handle_conference_ended(event_data, attributes):
 			meeting_doc.status = "Completed"
 			meeting_doc.actual_end_time = end_time
 			meeting_doc.save(ignore_permissions=True)
+			
+			# Send real-time notification
+			frappe.publish_realtime(
+				event='vidcon_meeting_ended',
+				message={
+					'meeting_name': meeting.name,
+					'status': 'Completed',
+					'conference_id': conference_id,
+					'end_time': str(end_time)
+				},
+				doctype='VidCon Meeting',
+				docname=meeting.name
+			)
 			
 			frappe.log_error(
 				title=f"✅ Meeting {meeting.name} updated to Completed",
