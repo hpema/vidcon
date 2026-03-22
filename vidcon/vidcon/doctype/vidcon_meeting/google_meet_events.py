@@ -818,7 +818,9 @@ def handle_transcript_ready(event_data, attributes):
 		subscription_uuid_encoded = ''
 		if subscription_uuid:
 			import base64
-			subscription_uuid_encoded = base64.b64encode(subscription_uuid.encode()).decode()[:20]
+			# Format in subscription: $a0094893-0ba5-4ebb-8a89-5c73d8dfebfe
+			uuid_with_prefix = f'${subscription_uuid}'.encode('utf-8')
+			subscription_uuid_encoded = base64.b64encode(uuid_with_prefix).decode('utf-8')[:20]
 		
 		# Extract space ID from ce-subject attribute
 		ce_subject = attributes.get('ce-subject', '')
