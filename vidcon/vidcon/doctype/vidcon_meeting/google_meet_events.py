@@ -342,37 +342,37 @@ def handle_pubsub_push():
 				title=f"🚀 Processing: conference.started - {timestamp}",
 				message="Calling handle_conference_started()"
 			)
-			handle_conference_started(event_data)
+			handle_conference_started(event_data, attributes)
 		elif event_type == 'google.workspace.meet.conference.v2.ended':
 			frappe.log_error(
 				title=f"🏁 Processing: conference.ended - {timestamp}",
 				message="Calling handle_conference_ended()"
 			)
-			handle_conference_ended(event_data)
+			handle_conference_ended(event_data, attributes)
 		elif event_type == 'google.workspace.meet.participant.v2.joined':
 			frappe.log_error(
 				title=f"👤 Processing: participant.joined - {timestamp}",
 				message="Calling handle_participant_joined()"
 			)
-			handle_participant_joined(event_data)
+			handle_participant_joined(event_data, attributes)
 		elif event_type == 'google.workspace.meet.participant.v2.left':
 			frappe.log_error(
 				title=f"👋 Processing: participant.left - {timestamp}",
 				message="Calling handle_participant_left()"
 			)
-			handle_participant_left(event_data)
+			handle_participant_left(event_data, attributes)
 		elif event_type == 'google.workspace.meet.recording.v2.fileGenerated':
 			frappe.log_error(
 				title=f"🎥 Processing: recording.fileGenerated - {timestamp}",
 				message="Calling handle_recording_ready()"
 			)
-			handle_recording_ready(event_data)
+			handle_recording_ready(event_data, attributes)
 		elif event_type == 'google.workspace.meet.transcript.v2.fileGenerated':
 			frappe.log_error(
 				title=f"📝 Processing: transcript.fileGenerated - {timestamp}",
 				message="Calling handle_transcript_ready()"
 			)
-			handle_transcript_ready(event_data)
+			handle_transcript_ready(event_data, attributes)
 		else:
 			frappe.log_error(
 				title=f"⚠️ Unhandled Event Type - {timestamp}",
@@ -395,7 +395,7 @@ def handle_pubsub_push():
 		return {"status": "error", "message": str(e)}
 
 
-def handle_conference_started(event_data):
+def handle_conference_started(event_data, attributes):
 	"""
 	Handle conference.started event.
 	Update VidCon Meeting status to In Progress.
@@ -408,8 +408,16 @@ def handle_conference_started(event_data):
 		conference_record = event_data.get('conferenceRecord', {})
 		conference_name = conference_record.get('name', '')
 		conference_id = conference_name.split('/')[-1] if conference_name else ''
-		space_name = conference_record.get('space', '')
-		space_id = space_name.split('/')[-1] if space_name else ''
+		
+		# Extract space ID from ce-subject attribute (format: //meet.googleapis.com/spaces/SPACE_ID)
+		ce_subject = attributes.get('ce-subject', '')
+		space_id = ce_subject.split('/')[-1] if ce_subject else ''
+		
+		# Fallback to event data if available
+		if not space_id:
+			space_name = conference_record.get('space', '')
+			space_id = space_name.split('/')[-1] if space_name else ''
+		
 		start_time = conference_record.get('startTime')
 		
 		frappe.logger().info(f"Conference ID: {conference_id}")
@@ -468,7 +476,7 @@ def handle_conference_started(event_data):
 		frappe.log_error(title="Conference Started Handler Error", message=str(e))
 
 
-def handle_participant_joined(event_data):
+def handle_participant_joined(event_data, attributes):
 	"""
 	Handle participant.joined event.
 	Create or update attendee record.
@@ -496,7 +504,7 @@ def handle_participant_joined(event_data):
 		frappe.log_error(title="Participant Joined Handler Error", message=str(e))
 
 
-def handle_participant_left(event_data):
+def handle_participant_left(event_data, attributes):
 	"""
 	Handle participant.left event.
 	Update attendee record with left timestamp.
@@ -523,7 +531,7 @@ def handle_participant_left(event_data):
 		frappe.log_error(title="Participant Left Handler Error", message=str(e))
 
 
-def handle_conference_ended(event_data):
+def handle_conference_ended(event_data, attributes):
 	"""
 	Handle conference.ended event.
 	Update VidCon Meeting status and trigger transcript fetch.
@@ -536,9 +544,21 @@ def handle_conference_ended(event_data):
 		conference_record = event_data.get('conferenceRecord', {})
 		conference_name = conference_record.get('name', '')
 		conference_id = conference_name.split('/')[-1] if conference_name else ''
-		space_name = conference_record.get('space', '')
-		space_id = space_name.split('/')[-1] if space_name else ''
+		
+		# Extract space ID from ce-subject attribute (format: //meet.googleapis.com/spaces/SPACE_ID)
+		ce_subject = attributes.get('ce-subject', '')
+		space_id = ce_subject.split('/')[-1] if ce_subject else ''
+		
+		# Fallback to event data if available
+		if not space_id:
+			space_name = conference_record.get('space', '')
+			space_id = space_name.split('/')[-1] if space_name else ''
+		
 		end_time = conference_record.get('endTime')
+		# Use current time if endTime not provided
+		if not end_time:
+			from frappe.utils import now_datetime
+			end_time = now_datetime()
 		
 		frappe.log_error(
 			title=f"🔍 Looking for meeting - conference.ended",
@@ -638,7 +658,7 @@ def handle_conference_ended(event_data):
 		frappe.log_error(title="Conference Ended Handler Error", message=str(e))
 
 
-def handle_recording_ready(event_data):
+def handle_recording_ready(event_data, attributes):
 	"""
 	Handle recording.fileGenerated event.
 	Store recording details in VidCon Meeting.
@@ -647,6 +667,10 @@ def handle_recording_ready(event_data):
 		recording = event_data.get('recording', {})
 		conference_id = recording.get('conferenceRecord', '').split('/')[-1]
 		drive_file_id = recording.get('driveDestination', {}).get('file', '').split('/')[-1]
+		
+		# Extract space ID from ce-subject attribute
+		ce_subject = attributes.get('ce-subject', '')
+		space_id = ce_subject.split('/')[-1] if ce_subject else ''
 		
 		frappe.logger().info(f"Recording ready for conference: {conference_id}")
 		
@@ -671,7 +695,7 @@ def handle_recording_ready(event_data):
 		frappe.logger().error(f"Error handling recording ready: {str(e)}")
 
 
-def handle_transcript_ready(event_data):
+def handle_transcript_ready(event_data, attributes):
 	"""
 	Handle transcript.fileGenerated event.
 	Get transcript details from Meet API and download from Drive.
@@ -683,7 +707,12 @@ def handle_transcript_ready(event_data):
 		transcript = event_data.get('transcript', {})
 		transcript_name = transcript.get('name', '')
 		
+		# Extract space ID from ce-subject attribute
+		ce_subject = attributes.get('ce-subject', '')
+		space_id = ce_subject.split('/')[-1] if ce_subject else ''
+		
 		frappe.logger().info(f"Transcript name: {transcript_name}")
+		frappe.logger().info(f"Space ID from ce-subject: {space_id}")
 		frappe.logger().info(f"Transcript ready: {transcript_name}")
 		
 		# Extract conference ID from transcript name
@@ -697,7 +726,7 @@ def handle_transcript_ready(event_data):
 		
 		frappe.log_error(
 			title=f"🔍 Looking for meeting with conference_id: {conference_id}",
-			message=f"Conference ID: {conference_id}\nTranscript name: {transcript_name}"
+			message=f"Conference ID: {conference_id}\nSpace ID: {space_id}\nTranscript name: {transcript_name}"
 		)
 		
 		# Find VidCon Meeting by conference ID
@@ -713,34 +742,56 @@ def handle_transcript_ready(event_data):
 		)
 		frappe.logger().info(f"Found {len(meetings)} meetings by conference_id")
 		
-		# If not found, this might be a case where conference.started event was missed
-		# Try to find by status and recent completion time
-		if not meetings:
-			frappe.logger().info(f"No meeting found by conference_id, checking recently completed meetings")
-			from frappe.utils import add_to_date, now_datetime
-			cutoff_time = add_to_date(now_datetime(), hours=-3)
+		# If not found by conference_id, try by space_id
+		if not meetings and space_id:
+			frappe.log_error(
+				title=f"🔍 Trying space_id lookup for transcript",
+				message=f"Space ID: {space_id}\nConference ID not found, searching by space_id"
+			)
+			frappe.logger().info(f"No meeting found by conference_id, trying space_id: {space_id}")
 			
 			meetings = frappe.get_all(
 				"VidCon Meeting",
 				filters={
-					"status": ["in", ["Completed", "In Progress"]],
-					"modified": [">=", cutoff_time]
+					"google_space_id": space_id,
+					"status": ["in", ["Completed", "In Progress"]]
 				},
 				fields=["name", "google_conference_id", "google_space_id", "status"],
 				order_by="modified desc"
 			)
-			frappe.logger().info(f"Found {len(meetings)} recently completed meetings")
+			frappe.log_error(
+				title=f"📊 Found {len(meetings)} meetings by space_id",
+				message=f"Space ID: {space_id}\nMeetings: {json.dumps([dict(m) for m in meetings], indent=2) if meetings else 'None'}"
+			)
+			frappe.logger().info(f"Found {len(meetings)} meetings by space_id")
+			
+			# Store conference_id on the meeting for future lookups
+			if meetings:
+				for meeting in meetings:
+					if not meeting.get('google_conference_id'):
+						frappe.db.set_value(
+							"VidCon Meeting",
+							meeting.name,
+							"google_conference_id",
+							conference_id,
+							update_modified=False
+						)
+						frappe.log_error(
+							title=f"💾 Stored conference_id for {meeting.name}",
+							message=f"Conference ID: {conference_id}"
+						)
 		
 		frappe.logger().info(f"Found {len(meetings)} meetings for conference {conference_id}")
 		
 		for meeting in meetings:
 			frappe.log_error(
-				title=f"📥 Downloading transcript for meeting: {meeting.name}",
-				message=f"Meeting: {meeting.name}\nTranscript: {transcript_name}\nConference ID: {conference_id}"
+				title=f"📥 Downloading transcript for meeting: {meeting['name'] if isinstance(meeting, dict) else meeting.name}",
+				message=f"Meeting: {meeting['name'] if isinstance(meeting, dict) else meeting.name}\nTranscript: {transcript_name}\nConference ID: {conference_id}"
 			)
-			frappe.logger().info(f"Downloading transcript for meeting: {meeting.name}")
+			meeting_name = meeting['name'] if isinstance(meeting, dict) else meeting.name
+			frappe.logger().info(f"Downloading transcript for meeting: {meeting_name}")
 			# Get transcript details from Meet API and download
-			download_transcript_from_meet_api(meeting.name, transcript_name)
+			download_transcript_from_meet_api(meeting_name, transcript_name)
 		
 		if not meetings:
 			frappe.log_error(
