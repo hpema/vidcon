@@ -1183,20 +1183,20 @@ def download_transcript_from_meet_api(meeting_name, transcript_name):
 			frappe.logger().warning(f"⚠ No Gemini notes found in transcript")
 		
 		meeting_doc.save(ignore_permissions=True)
-	
-	# Add activity comment for audit trail
-	notes_info = f"\n- Gemini Notes: Extracted ({len(gemini_notes)} characters)" if gemini_notes else "\n- Gemini Notes: Not found"
-	meeting_doc.add_comment(
-		'Comment',
-		f"📄 **Transcript Downloaded**\n\n"
-		f"- Transcript ID: `{transcript_name.split('/')[-1]}`\n"
-		f"- Drive Document: [View Transcript](https://docs.google.com/document/d/{document_id}/view)\n"
-		f"- Size: {len(transcript_text)} characters"
-		f"{notes_info}"
-	)
-	
-	frappe.logger().info(f"✓ Transcript downloaded and stored for {meeting_name}")
-	frappe.logger().info(f"Transcript downloaded and stored for {meeting_name}")
+		
+		# Add activity comment for audit trail
+		notes_info = f"\n- Gemini Notes: Extracted ({len(gemini_notes)} characters)" if gemini_notes else "\n- Gemini Notes: Not found"
+		meeting_doc.add_comment(
+			'Comment',
+			f"📄 **Transcript Downloaded**\n\n"
+			f"- Transcript ID: `{transcript_name.split('/')[-1]}`\n"
+			f"- Drive Document: [View Transcript](https://docs.google.com/document/d/{document_id}/view)\n"
+			f"- Size: {len(transcript_text)} characters"
+			f"{notes_info}"
+		)
+		
+		frappe.logger().info(f"✓ Transcript downloaded and stored for {meeting_name}")
+		frappe.logger().info(f"Transcript downloaded and stored for {meeting_name}")
 		
 	except Exception as e:
 		frappe.logger().error(f"Error downloading transcript from Meet API: {str(e)}")
