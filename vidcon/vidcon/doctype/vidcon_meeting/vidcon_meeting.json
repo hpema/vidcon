@@ -17,7 +17,6 @@
   "end_time",
   "duration",
   "google_integration_section",
-  "event",
   "google_meet_link",
   "google_space_id",
   "column_break_3",
@@ -115,14 +114,6 @@
    "fieldname": "google_integration_section",
    "fieldtype": "Section Break",
    "label": "Google Integration"
-  },
-  {
-   "fieldname": "event",
-   "fieldtype": "Link",
-   "label": "Event",
-   "options": "Event",
-   "read_only": 1,
-   "ondelete": "Set Null"
   },
   {
    "fieldname": "google_meet_link",
