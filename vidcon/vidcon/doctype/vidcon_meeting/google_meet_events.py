@@ -321,12 +321,15 @@ def handle_conference_started(event_data):
 		conference_record = event_data.get('conferenceRecord', {})
 		conference_name = conference_record.get('name', '')
 		conference_id = conference_name.split('/')[-1] if conference_name else ''
+		space_name = conference_record.get('space', '')
+		space_id = space_name.split('/')[-1] if space_name else ''
 		start_time = conference_record.get('startTime')
 		
 		frappe.logger().info(f"Conference ID: {conference_id}")
+		frappe.logger().info(f"Space ID: {space_id}")
 		frappe.logger().info(f"Start time: {start_time}")
 		
-		# Find VidCon Meeting by conference ID or space ID
+		# Try to find meeting by conference_id first (if already set from previous event)
 		meetings = frappe.get_all(
 			"VidCon Meeting",
 			filters={
@@ -338,24 +341,26 @@ def handle_conference_started(event_data):
 		
 		frappe.logger().info(f"Found {len(meetings)} meetings by conference_id")
 		
-		# If not found by conference ID, try by space ID from subscription
-		if not meetings:
-			# Get space ID from the event (it's in the ce-subject attribute)
-			# We'll need to pass it from the main handler
-			frappe.logger().info(f"No meetings found by conference_id, trying all scheduled meetings")
+		# If not found by conference_id, try by space_id (this is the first event for this meeting)
+		if not meetings and space_id:
+			frappe.logger().info(f"Trying to find meeting by space_id: {space_id}")
 			meetings = frappe.get_all(
 				"VidCon Meeting",
-				filters={"status": "Scheduled"},
+				filters={
+					"google_space_id": space_id,
+					"status": "Scheduled"
+				},
 				fields=["name", "google_space_id", "google_meet_link", "google_conference_id"]
 			)
-			frappe.logger().info(f"All scheduled meetings: {json.dumps(meetings, indent=2)}")
+			frappe.logger().info(f"Found {len(meetings)} meetings by space_id")
 		
 		for meeting in meetings:
 			meeting_doc = frappe.get_doc("VidCon Meeting", meeting.name)
 			
-			# Store conference ID if not already set
+			# Store conference ID (this is critical for subsequent events)
 			if not meeting_doc.google_conference_id:
 				meeting_doc.google_conference_id = conference_id
+				frappe.logger().info(f"Stored conference_id {conference_id} for meeting {meeting.name}")
 			
 			meeting_doc.status = "In Progress"
 			meeting_doc.actual_start_time = start_time
@@ -365,7 +370,7 @@ def handle_conference_started(event_data):
 			frappe.logger().info(f"Meeting {meeting.name} marked as In Progress")
 		
 		if not meetings:
-			frappe.logger().info(f"✗ No meetings found for conference {conference_id}")
+			frappe.logger().info(f"✗ No meetings found for conference {conference_id} or space {space_id}")
 		
 		frappe.db.commit()
 		frappe.logger().info(f"=== CONFERENCE STARTED HANDLER COMPLETE ===\n")
@@ -445,12 +450,14 @@ def handle_conference_ended(event_data):
 		conference_name = conference_record.get('name', '')
 		conference_id = conference_name.split('/')[-1] if conference_name else ''
 		space_name = conference_record.get('space', '')
+		space_id = space_name.split('/')[-1] if space_name else ''
 		end_time = conference_record.get('endTime')
 		
 		frappe.logger().info(f"Conference ID: {conference_id}")
+		frappe.logger().info(f"Space ID: {space_id}")
 		frappe.logger().info(f"End time: {end_time}")
 		
-		# Find VidCon Meeting by conference ID
+		# Try to find meeting by conference_id first
 		meetings = frappe.get_all(
 			"VidCon Meeting",
 			filters={
@@ -462,15 +469,18 @@ def handle_conference_ended(event_data):
 		
 		frappe.logger().info(f"Found {len(meetings)} meetings by conference_id")
 		
-		# If not found, try all in-progress meetings
-		if not meetings:
-			frappe.logger().info(f"No meetings found by conference_id, trying all in-progress meetings")
+		# If not found by conference_id, try by space_id
+		if not meetings and space_id:
+			frappe.logger().info(f"Trying to find meeting by space_id: {space_id}")
 			meetings = frappe.get_all(
 				"VidCon Meeting",
-				filters={"status": ["in", ["Scheduled", "In Progress"]]},
-				fields=["name", "google_meet_link", "google_conference_id"]
+				filters={
+					"google_space_id": space_id,
+					"status": ["in", ["Scheduled", "In Progress"]]
+				},
+				fields=["name", "google_meet_link", "google_conference_id", "google_space_id"]
 			)
-			frappe.logger().info(f"All in-progress meetings: {json.dumps(meetings, indent=2)}")
+			frappe.logger().info(f"Found {len(meetings)} meetings by space_id")
 		
 		for meeting in meetings:
 			meeting_doc = frappe.get_doc("VidCon Meeting", meeting.name)
@@ -572,16 +582,28 @@ def handle_transcript_ready(event_data):
 		meetings = frappe.get_all(
 			"VidCon Meeting",
 			filters={"google_conference_id": conference_id},
-			fields=["name"]
+			fields=["name", "google_conference_id"]
 		)
 		
+		frappe.logger().info(f"Found {len(meetings)} meetings by conference_id")
+		
+		# If not found, this might be a case where conference.started event was missed
+		# Try to find by status and recent completion time
 		if not meetings:
-			# Try finding by Meet link containing conference ID
+			frappe.logger().info(f"No meeting found by conference_id, checking recently completed meetings")
+			from frappe.utils import add_to_date, now_datetime
+			cutoff_time = add_to_date(now_datetime(), hours=-3)
+			
 			meetings = frappe.get_all(
 				"VidCon Meeting",
-				filters={"google_meet_link": ["like", f"%{conference_id}%"]},
-				fields=["name"]
+				filters={
+					"status": ["in", ["Completed", "In Progress"]],
+					"modified": [">=", cutoff_time]
+				},
+				fields=["name", "google_conference_id", "google_space_id"],
+				order_by="modified desc"
 			)
+			frappe.logger().info(f"Found {len(meetings)} recently completed meetings")
 		
 		frappe.logger().info(f"Found {len(meetings)} meetings for conference {conference_id}")
 		

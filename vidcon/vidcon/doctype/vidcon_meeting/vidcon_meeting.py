@@ -305,3 +305,226 @@ def check_subscription_status(meeting_name):
 		"subscription_id": meeting.meet_subscription_id,
 		"state": status.get("state") if status else "UNKNOWN"
 	}
+
+
+@frappe.whitelist()
+def sync_from_google_meet(meeting_name):
+	"""Sync meeting status, times, and transcript from Google Meet API"""
+	meeting = frappe.get_doc("VidCon Meeting", meeting_name)
+	meeting.check_permission("write")
+	
+	if not meeting.google_space_id:
+		frappe.throw(_("No Google Meet space ID found. Meeting may not have been created properly."))
+	
+	try:
+		from google.oauth2.credentials import Credentials
+		from googleapiclient.discovery import build
+		from vidcon.vidcon.doctype.vidcon_meeting.subscription_manager import get_vidcon_access_token
+		
+		settings = frappe.get_single("VidCon Settings")
+		if not settings.google_calendar:
+			frappe.throw(_("Please configure Google Calendar in VidCon Settings"))
+		
+		google_calendar = frappe.get_doc("Google Calendar", settings.google_calendar)
+		google_settings = frappe.get_single("Google Settings")
+		
+		# Build credentials
+		credentials = Credentials(
+			token=get_vidcon_access_token(settings.google_calendar),
+			refresh_token=google_calendar.get_password("refresh_token"),
+			token_uri="https://oauth2.googleapis.com/token",
+			client_id=google_settings.client_id,
+			client_secret=google_settings.get_password("client_secret")
+		)
+		
+		# Build Meet API service
+		meet_service = build('meet', 'v2', credentials=credentials, static_discovery=False)
+		
+		updates = []
+		
+		# Try to find conference record by space_id
+		space_name = f"spaces/{meeting.google_space_id}"
+		
+		try:
+			# List conference records for this space
+			conferences_response = meet_service.conferenceRecords().list(
+				filter=f'space.name="{space_name}"'
+			).execute()
+			
+			conferences = conferences_response.get('conferenceRecords', [])
+			
+			if conferences:
+				# Get the most recent conference
+				conference = conferences[0]
+				conference_id = conference.get('name', '').split('/')[-1]
+				
+				# Update conference_id if not set
+				if not meeting.google_conference_id:
+					meeting.google_conference_id = conference_id
+					updates.append("Conference ID")
+				
+				# Update start time
+				start_time = conference.get('startTime')
+				if start_time and not meeting.actual_start_time:
+					meeting.actual_start_time = start_time
+					updates.append("Start time")
+				
+				# Update end time and status
+				end_time = conference.get('endTime')
+				if end_time:
+					if not meeting.actual_end_time:
+						meeting.actual_end_time = end_time
+						updates.append("End time")
+					
+					if meeting.status in ["Scheduled", "In Progress"]:
+						meeting.status = "Completed"
+						updates.append("Status → Completed")
+				elif start_time and meeting.status == "Scheduled":
+					meeting.status = "In Progress"
+					updates.append("Status → In Progress")
+				
+				# Try to fetch transcript if meeting is completed
+				if end_time and not meeting.transcript:
+					try:
+						transcripts_response = meet_service.conferenceRecords().transcripts().list(
+							parent=conference.get('name')
+						).execute()
+						
+						transcripts = transcripts_response.get('transcripts', [])
+						
+						if transcripts:
+							transcript = transcripts[0]
+							transcript_name = transcript.get('name')
+							
+							# List transcript entries
+							entries_response = meet_service.conferenceRecords().transcripts().entries().list(
+								parent=transcript_name
+							).execute()
+							
+							entries = entries_response.get('entries', [])
+							
+							# Combine transcript text
+							full_transcript = []
+							for entry in entries:
+								participant = entry.get('participant', '')
+								text = entry.get('text', '')
+								start_time_entry = entry.get('startTime', '')
+								full_transcript.append(f"[{start_time_entry}] {participant}: {text}")
+							
+							meeting.transcript = "\n".join(full_transcript)
+							meeting.transcript_retrieved_at = frappe.utils.now_datetime()
+							meeting.status = "Transcript Retrieved"
+							
+							# Get Drive file info
+							drive_destination = transcript.get('driveDestination', {})
+							if drive_destination:
+								file_id = drive_destination.get('file', '').split('/')[-1]
+								meeting.transcript_file_id = file_id
+								meeting.transcript_url = f"https://drive.google.com/file/d/{file_id}/view"
+							
+							updates.append("Transcript")
+					except Exception as transcript_error:
+						frappe.log_error(
+							title=f"Transcript fetch failed during sync - {meeting_name}",
+							message=str(transcript_error)
+						)
+						# Don't fail the whole sync if transcript fetch fails
+				
+				# Save updates
+				meeting.save(ignore_permissions=True)
+				frappe.db.commit()
+				
+				if updates:
+					message = f"Updated: {', '.join(updates)}"
+					frappe.msgprint(_(message), indicator="green")
+					return {
+						"success": True,
+						"message": message,
+						"updates": updates,
+						"status": meeting.status
+					}
+				else:
+					frappe.msgprint(_("Meeting is already up to date"), indicator="blue")
+					return {
+						"success": True,
+						"message": "Already up to date",
+						"updates": [],
+						"status": meeting.status
+					}
+			else:
+				frappe.msgprint(
+					_("No conference found for this meeting. Meeting may not have been started yet."),
+					indicator="orange"
+				)
+				return {
+					"success": False,
+					"message": "No conference found"
+				}
+				
+		except Exception as api_error:
+			frappe.log_error(
+				title=f"Google Meet API error - {meeting_name}",
+				message=str(api_error)
+			)
+			frappe.throw(_(f"Failed to fetch from Google Meet API: {str(api_error)}"))
+			
+	except Exception as e:
+		frappe.log_error(
+			title=f"Sync from Google Meet failed - {meeting_name}",
+			message=str(e)
+		)
+		frappe.throw(_(f"Failed to sync from Google Meet: {str(e)}"))
+
+
+@frappe.whitelist()
+def fetch_transcript_manually(meeting_name):
+	"""Manually fetch transcript for a completed meeting"""
+	meeting = frappe.get_doc("VidCon Meeting", meeting_name)
+	meeting.check_permission("write")
+	
+	# Validate meeting is completed
+	if meeting.status not in ["Completed", "In Progress"]:
+		frappe.throw(_("Meeting must be completed before fetching transcript"))
+	
+	# Check if we have conference_id (needed for Meet API)
+	if not meeting.google_conference_id:
+		frappe.throw(_("No conference ID found. Meeting may not have been started yet."))
+	
+	# Check if transcript already exists
+	if meeting.transcript and meeting.status == "Transcript Retrieved":
+		frappe.msgprint(_("Transcript already exists. Re-fetching..."), indicator="orange")
+	
+	try:
+		# Import the transcript fetch function
+		from vidcon.vidcon.doctype.vidcon_meeting.google_meet_events import fetch_transcript_for_conference
+		
+		# Fetch transcript synchronously
+		fetch_transcript_for_conference(
+			conference_id=meeting.google_conference_id,
+			meeting_name=meeting.name
+		)
+		
+		# Reload to get updated data
+		meeting.reload()
+		
+		if meeting.transcript:
+			frappe.msgprint(_("Transcript fetched successfully!"), indicator="green")
+			return {
+				"success": True,
+				"message": "Transcript retrieved",
+				"status": meeting.status,
+				"transcript_length": len(meeting.transcript)
+			}
+		else:
+			frappe.msgprint(_("No transcript found. Transcript may not be available yet."), indicator="orange")
+			return {
+				"success": False,
+				"message": "No transcript available yet"
+			}
+			
+	except Exception as e:
+		frappe.log_error(
+			title=f"Manual Transcript Fetch Failed - {meeting_name}",
+			message=str(e)
+		)
+		frappe.throw(_(f"Failed to fetch transcript: {str(e)}"))
