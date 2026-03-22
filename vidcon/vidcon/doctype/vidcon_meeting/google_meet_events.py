@@ -409,6 +409,12 @@ def handle_conference_started(event_data, attributes):
 		conference_name = conference_record.get('name', '')
 		conference_id = conference_name.split('/')[-1] if conference_name else ''
 		
+		# Extract subscription UUID from ce-source
+		ce_source = attributes.get('ce-source', '')
+		subscription_uuid = ''
+		if 'meet-spaces-' in ce_source:
+			subscription_uuid = ce_source.split('meet-spaces-')[-1]
+		
 		# Extract space ID from ce-subject attribute (format: //meet.googleapis.com/spaces/SPACE_ID)
 		ce_subject = attributes.get('ce-subject', '')
 		space_id = ce_subject.split('/')[-1] if ce_subject else ''
@@ -422,6 +428,7 @@ def handle_conference_started(event_data, attributes):
 		
 		frappe.logger().info(f"Conference ID: {conference_id}")
 		frappe.logger().info(f"Space ID: {space_id}")
+		frappe.logger().info(f"Subscription UUID: {subscription_uuid}")
 		frappe.logger().info(f"Start time: {start_time}")
 		
 		# Try to find meeting by conference_id first (if already set from previous event)
@@ -436,7 +443,20 @@ def handle_conference_started(event_data, attributes):
 		
 		frappe.logger().info(f"Found {len(meetings)} meetings by conference_id")
 		
-		# If not found by conference_id, try by space_id (this is the first event for this meeting)
+		# If not found by conference_id, try by subscription UUID (most reliable)
+		if not meetings and subscription_uuid:
+			frappe.logger().info(f"Trying to find meeting by subscription UUID: {subscription_uuid}")
+			meetings = frappe.get_all(
+				"VidCon Meeting",
+				filters={
+					"meet_subscription_id": ["like", f"%{subscription_uuid}%"],
+					"status": "Scheduled"
+				},
+				fields=["name", "google_space_id", "google_meet_link", "google_conference_id", "meet_subscription_id"]
+			)
+			frappe.logger().info(f"Found {len(meetings)} meetings by subscription UUID")
+		
+		# Fallback to space_id if subscription lookup fails
 		if not meetings and space_id:
 			frappe.logger().info(f"Trying to find meeting by space_id: {space_id}")
 			meetings = frappe.get_all(
@@ -545,6 +565,12 @@ def handle_conference_ended(event_data, attributes):
 		conference_name = conference_record.get('name', '')
 		conference_id = conference_name.split('/')[-1] if conference_name else ''
 		
+		# Extract subscription UUID from ce-source (format: //workspaceevents.googleapis.com/subscriptions/meet-spaces-UUID)
+		ce_source = attributes.get('ce-source', '')
+		subscription_uuid = ''
+		if 'meet-spaces-' in ce_source:
+			subscription_uuid = ce_source.split('meet-spaces-')[-1]
+		
 		# Extract space ID from ce-subject attribute (format: //meet.googleapis.com/spaces/SPACE_ID)
 		ce_subject = attributes.get('ce-subject', '')
 		space_id = ce_subject.split('/')[-1] if ce_subject else ''
@@ -562,7 +588,7 @@ def handle_conference_ended(event_data, attributes):
 		
 		frappe.log_error(
 			title=f"🔍 Looking for meeting - conference.ended",
-			message=f"Conference ID: {conference_id}\nSpace ID: {space_id}\nEnd time: {end_time}"
+			message=f"Conference ID: {conference_id}\nSpace ID: {space_id}\nSubscription UUID: {subscription_uuid}\nEnd time: {end_time}"
 		)
 		
 		frappe.logger().info(f"Conference ID: {conference_id}")
@@ -585,11 +611,32 @@ def handle_conference_ended(event_data, attributes):
 		)
 		frappe.logger().info(f"Found {len(meetings)} meetings by conference_id")
 		
-		# If not found by conference_id, try by space_id
+		# If not found by conference_id, try by subscription UUID (most reliable)
+		if not meetings and subscription_uuid:
+			frappe.log_error(
+				title=f"🔍 Trying subscription UUID lookup",
+				message=f"Subscription UUID: {subscription_uuid}\nConference ID not found, searching by subscription"
+			)
+			frappe.logger().info(f"Trying to find meeting by subscription UUID: {subscription_uuid}")
+			meetings = frappe.get_all(
+				"VidCon Meeting",
+				filters={
+					"meet_subscription_id": ["like", f"%{subscription_uuid}%"],
+					"status": ["in", ["Scheduled", "In Progress"]]
+				},
+				fields=["name", "google_meet_link", "google_conference_id", "google_space_id", "status", "meet_subscription_id"]
+			)
+			frappe.log_error(
+				title=f"📊 Meetings found by subscription UUID: {len(meetings)}",
+				message=f"Subscription UUID: {subscription_uuid}\nMeetings: {json.dumps([dict(m) for m in meetings], indent=2) if meetings else 'None'}"
+			)
+			frappe.logger().info(f"Found {len(meetings)} meetings by subscription UUID")
+		
+		# Fallback to space_id if subscription lookup fails
 		if not meetings and space_id:
 			frappe.log_error(
 				title=f"🔍 Trying space_id lookup",
-				message=f"Space ID: {space_id}\nConference ID not found, searching by space_id"
+				message=f"Space ID: {space_id}\nSubscription not found, searching by space_id"
 			)
 			frappe.logger().info(f"Trying to find meeting by space_id: {space_id}")
 			meetings = frappe.get_all(
@@ -707,12 +754,19 @@ def handle_transcript_ready(event_data, attributes):
 		transcript = event_data.get('transcript', {})
 		transcript_name = transcript.get('name', '')
 		
+		# Extract subscription UUID from ce-source
+		ce_source = attributes.get('ce-source', '')
+		subscription_uuid = ''
+		if 'meet-spaces-' in ce_source:
+			subscription_uuid = ce_source.split('meet-spaces-')[-1]
+		
 		# Extract space ID from ce-subject attribute
 		ce_subject = attributes.get('ce-subject', '')
 		space_id = ce_subject.split('/')[-1] if ce_subject else ''
 		
 		frappe.logger().info(f"Transcript name: {transcript_name}")
 		frappe.logger().info(f"Space ID from ce-subject: {space_id}")
+		frappe.logger().info(f"Subscription UUID: {subscription_uuid}")
 		frappe.logger().info(f"Transcript ready: {transcript_name}")
 		
 		# Extract conference ID from transcript name
@@ -726,7 +780,7 @@ def handle_transcript_ready(event_data, attributes):
 		
 		frappe.log_error(
 			title=f"🔍 Looking for meeting with conference_id: {conference_id}",
-			message=f"Conference ID: {conference_id}\nSpace ID: {space_id}\nTranscript name: {transcript_name}"
+			message=f"Conference ID: {conference_id}\nSpace ID: {space_id}\nSubscription UUID: {subscription_uuid}\nTranscript name: {transcript_name}"
 		)
 		
 		# Find VidCon Meeting by conference ID
@@ -742,13 +796,36 @@ def handle_transcript_ready(event_data, attributes):
 		)
 		frappe.logger().info(f"Found {len(meetings)} meetings by conference_id")
 		
-		# If not found by conference_id, try by space_id
+		# If not found by conference_id, try by subscription UUID (most reliable)
+		if not meetings and subscription_uuid:
+			frappe.log_error(
+				title=f"🔍 Trying subscription UUID lookup for transcript",
+				message=f"Subscription UUID: {subscription_uuid}\nConference ID not found, searching by subscription"
+			)
+			frappe.logger().info(f"No meeting found by conference_id, trying subscription UUID: {subscription_uuid}")
+			
+			meetings = frappe.get_all(
+				"VidCon Meeting",
+				filters={
+					"meet_subscription_id": ["like", f"%{subscription_uuid}%"],
+					"status": ["in", ["Completed", "In Progress"]]
+				},
+				fields=["name", "google_conference_id", "google_space_id", "status", "meet_subscription_id"],
+				order_by="modified desc"
+			)
+			frappe.log_error(
+				title=f"📊 Found {len(meetings)} meetings by subscription UUID",
+				message=f"Subscription UUID: {subscription_uuid}\nMeetings: {json.dumps([dict(m) for m in meetings], indent=2) if meetings else 'None'}"
+			)
+			frappe.logger().info(f"Found {len(meetings)} meetings by subscription UUID")
+		
+		# Fallback to space_id if subscription lookup fails
 		if not meetings and space_id:
 			frappe.log_error(
 				title=f"🔍 Trying space_id lookup for transcript",
-				message=f"Space ID: {space_id}\nConference ID not found, searching by space_id"
+				message=f"Space ID: {space_id}\nSubscription not found, searching by space_id"
 			)
-			frappe.logger().info(f"No meeting found by conference_id, trying space_id: {space_id}")
+			frappe.logger().info(f"No meeting found by subscription, trying space_id: {space_id}")
 			
 			meetings = frappe.get_all(
 				"VidCon Meeting",
