@@ -445,11 +445,11 @@ def handle_conference_started(event_data, attributes):
 		
 		# If not found by conference_id, try by subscription UUID (most reliable)
 		if not meetings and subscription_uuid:
-			frappe.logger().info(f"Trying to find meeting by subscription UUID: {subscription_uuid}")
+			frappe.logger().info(f"Trying to find meeting by subscription UUID: {subscription_uuid} (encoded: {subscription_uuid_encoded})")
 			meetings = frappe.get_all(
 				"VidCon Meeting",
 				filters={
-					"meet_subscription_id": ["like", f"%{subscription_uuid}%"],
+					"meet_subscription_id": ["like", f"%{subscription_uuid_encoded}%"],
 					"status": "Scheduled"
 				},
 				fields=["name", "google_space_id", "google_meet_link", "google_conference_id", "meet_subscription_id"]
@@ -568,8 +568,16 @@ def handle_conference_ended(event_data, attributes):
 		# Extract subscription UUID from ce-source (format: //workspaceevents.googleapis.com/subscriptions/meet-spaces-UUID)
 		ce_source = attributes.get('ce-source', '')
 		subscription_uuid = ''
+		subscription_uuid_encoded = ''
 		if 'meet-spaces-' in ce_source:
 			subscription_uuid = ce_source.split('meet-spaces-')[-1]
+			# Encode UUID to base64 for matching against meet_subscription_id
+			# The meet_subscription_id contains base64 encoded data with the UUID
+			import base64
+			# Create a search pattern from the first part of the base64 encoded UUID
+			# Format in subscription: $a0094893-0ba5-4ebb-8a89-5c73d8dfebfe
+			uuid_with_prefix = f'${subscription_uuid}'.encode('utf-8')
+			subscription_uuid_encoded = base64.b64encode(uuid_with_prefix).decode('utf-8')[:20]
 		
 		# Extract space ID from ce-subject attribute (format: //meet.googleapis.com/spaces/SPACE_ID)
 		ce_subject = attributes.get('ce-subject', '')
@@ -588,7 +596,7 @@ def handle_conference_ended(event_data, attributes):
 		
 		frappe.log_error(
 			title=f"🔍 Looking for meeting - conference.ended",
-			message=f"Conference ID: {conference_id}\nSpace ID: {space_id}\nSubscription UUID: {subscription_uuid}\nEnd time: {end_time}"
+			message=f"Conference ID: {conference_id}\nSpace ID: {space_id}\nSubscription UUID: {subscription_uuid}\nEncoded Subscription UUID: {subscription_uuid_encoded}\nEnd time: {end_time}"
 		)
 		
 		frappe.logger().info(f"Conference ID: {conference_id}")
@@ -615,20 +623,20 @@ def handle_conference_ended(event_data, attributes):
 		if not meetings and subscription_uuid:
 			frappe.log_error(
 				title=f"🔍 Trying subscription UUID lookup",
-				message=f"Subscription UUID: {subscription_uuid}\nConference ID not found, searching by subscription"
+				message=f"Subscription UUID: {subscription_uuid}\nEncoded search pattern: {subscription_uuid_encoded}\nConference ID not found, searching by subscription"
 			)
-			frappe.logger().info(f"Trying to find meeting by subscription UUID: {subscription_uuid}")
+			frappe.logger().info(f"Trying to find meeting by subscription UUID: {subscription_uuid} (encoded: {subscription_uuid_encoded})")
 			meetings = frappe.get_all(
 				"VidCon Meeting",
 				filters={
-					"meet_subscription_id": ["like", f"%{subscription_uuid}%"],
+					"meet_subscription_id": ["like", f"%{subscription_uuid_encoded}%"],
 					"status": ["in", ["Scheduled", "In Progress"]]
 				},
 				fields=["name", "google_meet_link", "google_conference_id", "google_space_id", "status", "meet_subscription_id"]
 			)
 			frappe.log_error(
 				title=f"📊 Meetings found by subscription UUID: {len(meetings)}",
-				message=f"Subscription UUID: {subscription_uuid}\nMeetings: {json.dumps([dict(m) for m in meetings], indent=2) if meetings else 'None'}"
+				message=f"Subscription UUID: {subscription_uuid}\nEncoded: {subscription_uuid_encoded}\nMeetings: {json.dumps([dict(m) for m in meetings], indent=2) if meetings else 'None'}"
 			)
 			frappe.logger().info(f"Found {len(meetings)} meetings by subscription UUID")
 		
@@ -800,22 +808,22 @@ def handle_transcript_ready(event_data, attributes):
 		if not meetings and subscription_uuid:
 			frappe.log_error(
 				title=f"🔍 Trying subscription UUID lookup for transcript",
-				message=f"Subscription UUID: {subscription_uuid}\nConference ID not found, searching by subscription"
+				message=f"Subscription UUID: {subscription_uuid}\nEncoded: {subscription_uuid_encoded}\nConference ID not found, searching by subscription"
 			)
-			frappe.logger().info(f"No meeting found by conference_id, trying subscription UUID: {subscription_uuid}")
+			frappe.logger().info(f"No meeting found by conference_id, trying subscription UUID: {subscription_uuid} (encoded: {subscription_uuid_encoded})")
 			
 			meetings = frappe.get_all(
 				"VidCon Meeting",
 				filters={
-					"meet_subscription_id": ["like", f"%{subscription_uuid}%"],
-					"status": ["in", ["Completed", "In Progress"]]
+					"meet_subscription_id": ["like", f"%{subscription_uuid_encoded}%"],
+					"status": ["in", ["Completed", "In Progress", "Scheduled"]]
 				},
 				fields=["name", "google_conference_id", "google_space_id", "status", "meet_subscription_id"],
 				order_by="modified desc"
 			)
 			frappe.log_error(
 				title=f"📊 Found {len(meetings)} meetings by subscription UUID",
-				message=f"Subscription UUID: {subscription_uuid}\nMeetings: {json.dumps([dict(m) for m in meetings], indent=2) if meetings else 'None'}"
+				message=f"Subscription UUID: {subscription_uuid}\nEncoded: {subscription_uuid_encoded}\nMeetings: {json.dumps([dict(m) for m in meetings], indent=2) if meetings else 'None'}"
 			)
 			frappe.logger().info(f"Found {len(meetings)} meetings by subscription UUID")
 		
