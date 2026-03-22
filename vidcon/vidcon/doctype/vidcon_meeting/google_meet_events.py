@@ -540,6 +540,11 @@ def handle_conference_ended(event_data):
 		space_id = space_name.split('/')[-1] if space_name else ''
 		end_time = conference_record.get('endTime')
 		
+		frappe.log_error(
+			title=f"🔍 Looking for meeting - conference.ended",
+			message=f"Conference ID: {conference_id}\nSpace ID: {space_id}\nEnd time: {end_time}"
+		)
+		
 		frappe.logger().info(f"Conference ID: {conference_id}")
 		frappe.logger().info(f"Space ID: {space_id}")
 		frappe.logger().info(f"End time: {end_time}")
@@ -551,13 +556,21 @@ def handle_conference_ended(event_data):
 				"google_conference_id": conference_id,
 				"status": ["in", ["Scheduled", "In Progress"]]
 			},
-			fields=["name", "google_meet_link", "google_conference_id"]
+			fields=["name", "google_meet_link", "google_conference_id", "google_space_id", "status"]
 		)
 		
+		frappe.log_error(
+			title=f"📊 Meetings found by conference_id: {len(meetings)}",
+			message=f"Conference ID: {conference_id}\nMeetings: {json.dumps([dict(m) for m in meetings], indent=2) if meetings else 'None'}"
+		)
 		frappe.logger().info(f"Found {len(meetings)} meetings by conference_id")
 		
 		# If not found by conference_id, try by space_id
 		if not meetings and space_id:
+			frappe.log_error(
+				title=f"🔍 Trying space_id lookup",
+				message=f"Space ID: {space_id}\nConference ID not found, searching by space_id"
+			)
 			frappe.logger().info(f"Trying to find meeting by space_id: {space_id}")
 			meetings = frappe.get_all(
 				"VidCon Meeting",
@@ -565,21 +578,38 @@ def handle_conference_ended(event_data):
 					"google_space_id": space_id,
 					"status": ["in", ["Scheduled", "In Progress"]]
 				},
-				fields=["name", "google_meet_link", "google_conference_id", "google_space_id"]
+				fields=["name", "google_meet_link", "google_conference_id", "google_space_id", "status"]
+			)
+			frappe.log_error(
+				title=f"📊 Meetings found by space_id: {len(meetings)}",
+				message=f"Space ID: {space_id}\nMeetings: {json.dumps([dict(m) for m in meetings], indent=2) if meetings else 'None'}"
 			)
 			frappe.logger().info(f"Found {len(meetings)} meetings by space_id")
 		
 		for meeting in meetings:
 			meeting_doc = frappe.get_doc("VidCon Meeting", meeting.name)
 			
+			frappe.log_error(
+				title=f"📝 Updating meeting: {meeting.name}",
+				message=f"Meeting: {meeting.name}\nCurrent status: {meeting_doc.status}\nNew status: Completed\nEnd time: {end_time}\nConference ID: {conference_id}"
+			)
+			
 			# Store conference ID if not already set
 			if not meeting_doc.google_conference_id:
 				meeting_doc.google_conference_id = conference_id
+				frappe.log_error(
+					title=f"💾 Stored conference_id for {meeting.name}",
+					message=f"Conference ID: {conference_id}"
+				)
 			
 			meeting_doc.status = "Completed"
 			meeting_doc.actual_end_time = end_time
 			meeting_doc.save(ignore_permissions=True)
 			
+			frappe.log_error(
+				title=f"✅ Meeting {meeting.name} updated to Completed",
+				message=f"Meeting: {meeting.name}\nStatus: Completed\nEnd time: {end_time}"
+			)
 			frappe.logger().info(f"✓ Meeting {meeting.name} marked as Completed")
 			frappe.logger().info(f"Meeting {meeting.name} marked as completed")
 			
@@ -665,13 +695,22 @@ def handle_transcript_ready(event_data):
 			frappe.logger().error(f"Invalid transcript name format: {transcript_name}")
 			return
 		
+		frappe.log_error(
+			title=f"🔍 Looking for meeting with conference_id: {conference_id}",
+			message=f"Conference ID: {conference_id}\nTranscript name: {transcript_name}"
+		)
+		
 		# Find VidCon Meeting by conference ID
 		meetings = frappe.get_all(
 			"VidCon Meeting",
 			filters={"google_conference_id": conference_id},
-			fields=["name", "google_conference_id"]
+			fields=["name", "google_conference_id", "google_space_id", "status"]
 		)
 		
+		frappe.log_error(
+			title=f"📊 Found {len(meetings)} meetings by conference_id",
+			message=f"Conference ID: {conference_id}\nMeetings found: {len(meetings)}\nMeeting details: {json.dumps([dict(m) for m in meetings], indent=2) if meetings else 'None'}"
+		)
 		frappe.logger().info(f"Found {len(meetings)} meetings by conference_id")
 		
 		# If not found, this might be a case where conference.started event was missed
@@ -687,7 +726,7 @@ def handle_transcript_ready(event_data):
 					"status": ["in", ["Completed", "In Progress"]],
 					"modified": [">=", cutoff_time]
 				},
-				fields=["name", "google_conference_id", "google_space_id"],
+				fields=["name", "google_conference_id", "google_space_id", "status"],
 				order_by="modified desc"
 			)
 			frappe.logger().info(f"Found {len(meetings)} recently completed meetings")
@@ -695,11 +734,32 @@ def handle_transcript_ready(event_data):
 		frappe.logger().info(f"Found {len(meetings)} meetings for conference {conference_id}")
 		
 		for meeting in meetings:
+			frappe.log_error(
+				title=f"📥 Downloading transcript for meeting: {meeting.name}",
+				message=f"Meeting: {meeting.name}\nTranscript: {transcript_name}\nConference ID: {conference_id}"
+			)
 			frappe.logger().info(f"Downloading transcript for meeting: {meeting.name}")
 			# Get transcript details from Meet API and download
 			download_transcript_from_meet_api(meeting.name, transcript_name)
 		
 		if not meetings:
+			frappe.log_error(
+				title=f"❌ No meetings found for conference {conference_id}",
+				message=f"Conference ID: {conference_id}\nTranscript: {transcript_name}\n\nChecking all meetings with google_conference_id set..."
+			)
+			
+			# Debug: Show all meetings with conference IDs
+			all_meetings = frappe.get_all(
+				"VidCon Meeting",
+				filters={"google_conference_id": ["is", "set"]},
+				fields=["name", "google_conference_id", "google_space_id", "status", "modified"],
+				limit=20
+			)
+			frappe.log_error(
+				title=f"📋 All meetings with conference_id (last 20)",
+				message=f"Total meetings with conference_id: {len(all_meetings)}\n\n{json.dumps([dict(m) for m in all_meetings], indent=2, default=str)}"
+			)
+			
 			frappe.logger().warning(f"✗ No meetings found for conference {conference_id}")
 		
 		frappe.db.commit()
