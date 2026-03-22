@@ -441,10 +441,9 @@ def handle_conference_started(event_data, attributes):
 		meetings = frappe.get_all(
 			"VidCon Meeting",
 			filters={
-				"google_conference_id": conference_id,
-				"status": "Scheduled"
+				"google_conference_id": conference_id
 			},
-			fields=["name", "google_space_id", "google_meet_link"]
+			fields=["name", "google_space_id", "google_meet_link", "status"]
 		)
 		
 		frappe.logger().info(f"Found {len(meetings)} meetings by conference_id")
@@ -455,10 +454,9 @@ def handle_conference_started(event_data, attributes):
 			meetings = frappe.get_all(
 				"VidCon Meeting",
 				filters={
-					"meet_subscription_id": ["like", f"%{subscription_uuid_encoded}%"],
-					"status": "Scheduled"
+					"meet_subscription_id": ["like", f"%{subscription_uuid_encoded}%"]
 				},
-				fields=["name", "google_space_id", "google_meet_link", "google_conference_id", "meet_subscription_id"]
+				fields=["name", "google_space_id", "google_meet_link", "google_conference_id", "meet_subscription_id", "status"]
 			)
 			frappe.logger().info(f"Found {len(meetings)} meetings by subscription UUID")
 		
@@ -468,10 +466,9 @@ def handle_conference_started(event_data, attributes):
 			meetings = frappe.get_all(
 				"VidCon Meeting",
 				filters={
-					"google_space_id": space_id,
-					"status": "Scheduled"
+					"google_space_id": space_id
 				},
-				fields=["name", "google_space_id", "google_meet_link", "google_conference_id"]
+				fields=["name", "google_space_id", "google_meet_link", "google_conference_id", "status"]
 			)
 			frappe.logger().info(f"Found {len(meetings)} meetings by space_id")
 		
@@ -486,6 +483,15 @@ def handle_conference_started(event_data, attributes):
 			meeting_doc.status = "In Progress"
 			meeting_doc.actual_start_time = start_time
 			meeting_doc.save(ignore_permissions=True)
+			
+			# Add activity comment for audit trail
+			meeting_doc.add_comment(
+				'Comment',
+				f"🚀 **Conference Started**\n\n"
+				f"- Conference ID: `{conference_id}`\n"
+				f"- Start Time: {start_time}\n"
+				f"- Status: In Progress"
+			)
 			
 			# Send real-time notification
 			frappe.publish_realtime(
@@ -628,8 +634,7 @@ def handle_conference_ended(event_data, attributes):
 		meetings = frappe.get_all(
 			"VidCon Meeting",
 			filters={
-				"google_conference_id": conference_id,
-				"status": ["in", ["Scheduled", "In Progress"]]
+				"google_conference_id": conference_id
 			},
 			fields=["name", "google_meet_link", "google_conference_id", "google_space_id", "status"]
 		)
@@ -650,8 +655,7 @@ def handle_conference_ended(event_data, attributes):
 			meetings = frappe.get_all(
 				"VidCon Meeting",
 				filters={
-					"meet_subscription_id": ["like", f"%{subscription_uuid_encoded}%"],
-					"status": ["in", ["Scheduled", "In Progress"]]
+					"meet_subscription_id": ["like", f"%{subscription_uuid_encoded}%"]
 				},
 				fields=["name", "google_meet_link", "google_conference_id", "google_space_id", "status", "meet_subscription_id"]
 			)
@@ -671,8 +675,7 @@ def handle_conference_ended(event_data, attributes):
 			meetings = frappe.get_all(
 				"VidCon Meeting",
 				filters={
-					"google_space_id": space_id,
-					"status": ["in", ["Scheduled", "In Progress"]]
+					"google_space_id": space_id
 				},
 				fields=["name", "google_meet_link", "google_conference_id", "google_space_id", "status"]
 			)
@@ -701,6 +704,15 @@ def handle_conference_ended(event_data, attributes):
 			meeting_doc.status = "Completed"
 			meeting_doc.actual_end_time = end_time
 			meeting_doc.save(ignore_permissions=True)
+			
+			# Add activity comment for audit trail
+			meeting_doc.add_comment(
+				'Comment',
+				f"🏁 **Conference Ended**\n\n"
+				f"- Conference ID: `{conference_id}`\n"
+				f"- End Time: {end_time}\n"
+				f"- Status: Completed"
+			)
 			
 			# Send real-time notification
 			frappe.publish_realtime(
@@ -849,8 +861,7 @@ def handle_transcript_ready(event_data, attributes):
 			meetings = frappe.get_all(
 				"VidCon Meeting",
 				filters={
-					"meet_subscription_id": ["like", f"%{subscription_uuid_encoded}%"],
-					"status": ["in", ["Completed", "In Progress", "Scheduled"]]
+					"meet_subscription_id": ["like", f"%{subscription_uuid_encoded}%"]
 				},
 				fields=["name", "google_conference_id", "google_space_id", "status", "meet_subscription_id"],
 				order_by="modified desc"
@@ -872,8 +883,7 @@ def handle_transcript_ready(event_data, attributes):
 			meetings = frappe.get_all(
 				"VidCon Meeting",
 				filters={
-					"google_space_id": space_id,
-					"status": ["in", ["Completed", "In Progress"]]
+					"google_space_id": space_id
 				},
 				fields=["name", "google_conference_id", "google_space_id", "status"],
 				order_by="modified desc"
@@ -1173,9 +1183,20 @@ def download_transcript_from_meet_api(meeting_name, transcript_name):
 			frappe.logger().warning(f"⚠ No Gemini notes found in transcript")
 		
 		meeting_doc.save(ignore_permissions=True)
-		
-		frappe.logger().info(f"✓ Transcript downloaded and stored for {meeting_name}")
-		frappe.logger().info(f"Transcript downloaded and stored for {meeting_name}")
+	
+	# Add activity comment for audit trail
+	notes_info = f"\n- Gemini Notes: Extracted ({len(gemini_notes)} characters)" if gemini_notes else "\n- Gemini Notes: Not found"
+	meeting_doc.add_comment(
+		'Comment',
+		f"📄 **Transcript Downloaded**\n\n"
+		f"- Transcript ID: `{transcript_name.split('/')[-1]}`\n"
+		f"- Drive Document: [View Transcript](https://docs.google.com/document/d/{document_id}/view)\n"
+		f"- Size: {len(transcript_text)} characters"
+		f"{notes_info}"
+	)
+	
+	frappe.logger().info(f"✓ Transcript downloaded and stored for {meeting_name}")
+	frappe.logger().info(f"Transcript downloaded and stored for {meeting_name}")
 		
 	except Exception as e:
 		frappe.logger().error(f"Error downloading transcript from Meet API: {str(e)}")
