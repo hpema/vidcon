@@ -221,9 +221,14 @@ scheduler_events = {
 # Authentication and authorization
 # --------------------------------
 
-# auth_hooks = [
-# 	"vidcon.auth.validate"
-# ]
+auth_hooks = [
+	"vidcon.auth_hooks.validate_vidcon_auth"
+]
+
+# Ignore CSRF for webhook endpoints (Google Pub/Sub)
+ignore_csrf = [
+	"/api/method/vidcon.vidcon.doctype.vidcon_meeting.google_meet_events.handle_pubsub_push"
+]
 
 # Automatically update python controller files with type annotations for this app.
 # export_python_type_annotations = True

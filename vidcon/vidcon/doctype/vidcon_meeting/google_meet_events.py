@@ -191,6 +191,7 @@ def handle_pubsub_push():
 		)
 		
 		# Get raw request body
+		raw_body = None
 		try:
 			raw_body = frappe.request.get_data(as_text=True)
 			frappe.log_error(
@@ -203,50 +204,70 @@ def handle_pubsub_push():
 				message=str(body_error)
 			)
 		
-		# Verify JWT token from Authorization header
+		# Verify JWT token from Authorization header (optional for now)
 		auth_header = frappe.request.headers.get('Authorization', '')
 		if not auth_header.startswith('Bearer '):
 			frappe.log_error(
-				title=f"❌ Missing JWT Token - {timestamp}",
-				message=f"Authorization header: {auth_header[:50] if auth_header else 'EMPTY'}"
+				title=f"⚠️ No JWT Token - Proceeding Without Auth - {timestamp}",
+				message=f"Authorization header: {auth_header[:50] if auth_header else 'EMPTY'}\n\nWARNING: JWT authentication is disabled. This is insecure.\nConfigure Pub/Sub push subscription with service account authentication."
 			)
-			return {"status": "error", "message": "Unauthorized"}, 401
-		
-		token = auth_header.replace('Bearer ', '')
-		frappe.log_error(
-			title=f"🔑 JWT Token Received - {timestamp}",
-			message=f"Token length: {len(token)} characters\nFirst 50 chars: {token[:50]}..."
-		)
-		
-		# Get the webhook URL for audience verification
-		site_url = frappe.utils.get_url()
-		audience = f"{site_url}/api/method/vidcon.vidcon.doctype.vidcon_meeting.google_meet_events.handle_pubsub_push"
-		
-		frappe.log_error(
-			title=f"🎯 Verifying JWT Audience - {timestamp}",
-			message=f"Expected audience: {audience}"
-		)
-		
-		# Verify the JWT token
-		decoded_token = verify_pubsub_jwt(token, audience)
-		if not decoded_token:
+			# Continue without JWT verification for now
+		else:
+			token = auth_header.replace('Bearer ', '')
 			frappe.log_error(
-				title=f"❌ JWT Verification Failed - {timestamp}",
-				message="Invalid or expired JWT token from Pub/Sub"
+				title=f"🔑 JWT Token Received - {timestamp}",
+				message=f"Token length: {len(token)} characters\nFirst 50 chars: {token[:50]}..."
 			)
-			return {"status": "error", "message": "Unauthorized"}, 401
-		
-		frappe.log_error(
-			title=f"✅ JWT Verified Successfully - {timestamp}",
-			message=f"Verified token for: {decoded_token.get('email')}\nIssuer: {decoded_token.get('iss')}"
-		)
+			
+			# Get the webhook URL for audience verification
+			# Remove port from URL as Google's JWT audience doesn't include it
+			site_url = frappe.utils.get_url()
+			# Remove :443 or :80 from the URL
+			import re
+			site_url_clean = re.sub(r':(443|80)$', '', site_url)
+			audience = f"{site_url_clean}/api/method/vidcon.vidcon.doctype.vidcon_meeting.google_meet_events.handle_pubsub_push"
+			
+			frappe.log_error(
+				title=f"🎯 Verifying JWT Audience - {timestamp}",
+				message=f"Expected audience: {audience}"
+			)
+			
+			# Verify the JWT token
+			decoded_token = verify_pubsub_jwt(token, audience)
+			if not decoded_token:
+				frappe.log_error(
+					title=f"❌ JWT Verification Failed - {timestamp}",
+					message="Invalid or expired JWT token from Pub/Sub"
+				)
+				return {"status": "error", "message": "Unauthorized"}, 401
+			
+			frappe.log_error(
+				title=f"✅ JWT Verified Successfully - {timestamp}",
+				message=f"Verified token for: {decoded_token.get('email')}\nIssuer: {decoded_token.get('iss')}"
+			)
 		
 		# Get the Pub/Sub message from request
-		envelope = frappe.request.get_json()
+		# Parse from raw_body since we already read the stream
+		envelope = None
+		if raw_body:
+			try:
+				envelope = json.loads(raw_body)
+			except json.JSONDecodeError as e:
+				frappe.log_error(
+					title=f"❌ JSON Parse Error - {timestamp}",
+					message=f"Could not parse request body as JSON: {str(e)}\nBody: {raw_body[:500]}"
+				)
+				return {"status": "error", "message": "Invalid JSON"}
 		
 		if not envelope:
 			frappe.log_error(title="Empty Pub/Sub Message", message="No message in request body")
 			return {"status": "error", "message": "No message"}
+		
+		# Log complete envelope structure for analysis
+		frappe.log_error(
+			title=f"📬 Complete Pub/Sub Envelope - {timestamp}",
+			message=f"Full envelope structure:\n{json.dumps(envelope, indent=2)}"
+		)
 		
 		# Extract the Pub/Sub message
 		pubsub_message = envelope.get('message', {})
